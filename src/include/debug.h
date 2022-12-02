@@ -7,9 +7,9 @@ extern int box86_log;    // log level
 extern int box86_dump;   // dump elf or not
 extern int box86_dynarec_log;
 extern int box86_dynarec;
-extern int box86_pagesize;
+extern uintptr_t box86_pagesize;
 extern uintptr_t box86_load_addr;
-extern int box86_backtrace;
+extern int box86_showbt;
 #ifdef DYNAREC
 extern int box86_dynarec_dump;
 extern int box86_dynarec_trace;
@@ -18,8 +18,11 @@ extern int box86_dynarec_largest;
 extern int box86_dynarec_bigblock;
 extern int box86_dynarec_strongmem;
 extern int box86_dynarec_x87double;
+extern int box86_dynarec_safeflags;
 extern uintptr_t box86_nodynarec_start, box86_nodynarec_end;
 extern int box86_dynarec_fastnan;
+extern int box86_dynarec_hotpage;
+extern int box86_dynarec_bleeding_edge;
 #ifdef ARM
 extern int arm_vfp;     // vfp version (3 or 4), with 32 registers is mendatory
 extern int arm_swap;
@@ -43,10 +46,16 @@ extern int box86_showsegv;
 extern int allow_missing_symbols;
 extern uintptr_t   trace_start, trace_end;
 extern char* trace_func;
+extern char* trace_init;
+extern char* box86_trace;
+extern uint64_t start_cnt;
 extern uintptr_t fmod_smc_start, fmod_smc_end; // to handle libfmod (from Unreal) SMC (self modifying code)
 extern uint32_t default_fs;
 extern int jit_gdb; // launch gdb when a segfault is trapped
 extern int box86_tcmalloc_minimal;  // when using tcmalloc_minimal
+extern int box86_x11threads;
+extern int box86_x11glx;
+extern char* box86_libGL;
 #define LOG_NONE 0
 #define LOG_INFO 1
 #define LOG_DEBUG 2
@@ -70,16 +79,27 @@ extern FILE* ftrace;
 #define EXPORTDYN 
 #endif
 
+void init_malloc_hook();
 #ifdef ANDROID
-#define __libc_malloc   malloc
-#define __libc_realloc  realloc
-#define __libc_calloc   calloc
-#define __libc_free     free
+#define box_malloc      malloc
+#define box_realloc     realloc
+#define box_calloc      calloc
+#define box_free        free
+#define box_memalign    memalign 
 #else
+extern size_t(*box_malloc_usable_size)(void*);
 extern void* __libc_malloc(size_t);
-extern void* __libc_realloc(size_t, void*);
+extern void* __libc_realloc(void*, size_t);
 extern void* __libc_calloc(size_t, size_t);
-extern void __libc_free(void*);
+extern void  __libc_free(void*);
+extern void* __libc_memalign(size_t, size_t);
+#define box_malloc      __libc_malloc
+#define box_realloc     __libc_realloc
+#define box_calloc      __libc_calloc
+#define box_free        __libc_free
+#define box_memalign    __libc_memalign 
 #endif
+extern char* box_strdup(const char* s);
+extern char* box_realpath(const char* path, char* ret);
 
 #endif //__DEBUG_H_

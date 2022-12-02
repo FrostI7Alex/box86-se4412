@@ -37,6 +37,7 @@
 #include <getopt.h>
 #include <pwd.h>
 #include <sys/prctl.h>
+#include <malloc.h>
 
 #include "wrappedlibs.h"
 
@@ -57,6 +58,7 @@
 #include "elfloader.h"
 #include "bridge.h"
 #include "globalsymbols.h"
+#include "rcfile.h"
 
 #ifdef PANDORA
 #ifndef __NR_preadv
@@ -553,7 +555,7 @@ pid_t EXPORT my_vfork(x86emu_t* emu)
 {
     #if 1
     emu->quit = 1;
-    emu->fork = 1;  // use regular fork...
+    emu->fork = 3;  // use regular fork...
     return 0;
     #else
     return 0;
@@ -565,7 +567,7 @@ int EXPORT my_uname(struct utsname *buf)
     static int box64_tested = 0;
     static int box64_available = 0;
     if(!box64_tested) {
-        char* box64path = strdup(my_context->box86path);
+        char* box64path = box_strdup(my_context->box86path);
         char* p = strrchr(box64path, '/');
         if(p) {
             p[1] = '\0';
@@ -574,7 +576,7 @@ int EXPORT my_uname(struct utsname *buf)
                 box64_available = 1;
         }
         box64_tested = 1;
-        free(box64path);
+        box_free(box64path);
     }
     // sizeof(struct utsname)==390 on i686, and also on ARM, so this seem safe
     int ret = uname(buf);
@@ -1223,7 +1225,7 @@ EXPORT int my___fxstat(x86emu_t *emu, int vers, int fd, void* buf)
                 errno = EINVAL;
                 return -1;
             }
-            f = (iFiip_t)dlsym(lib->priv.w.lib, "__fxstat");
+            f = (iFiip_t)dlsym(lib->w.lib, "__fxstat");
         }
 
         return f(vers, fd, buf);
@@ -1271,7 +1273,7 @@ EXPORT int my___xstat(x86emu_t* emu, int v, void* path, void* buf)
                 errno = EINVAL;
                 return -1;
             }
-            f = (iFipp_t)dlsym(lib->priv.w.lib, "__xstat");
+            f = (iFipp_t)dlsym(lib->w.lib, "__xstat");
         }
 
         return f(v, path, buf);
@@ -1303,7 +1305,7 @@ EXPORT int my___lxstat(x86emu_t* emu, int v, void* name, void* buf)
                 errno = EINVAL;
                 return -1;
             }
-            f = (iFipp_t)dlsym(lib->priv.w.lib, "__lxstat");
+            f = (iFipp_t)dlsym(lib->w.lib, "__lxstat");
         }
 
         return f(v, name, buf);
@@ -1370,7 +1372,7 @@ typedef int (*__compar_d_fn_t)(const void*, const void*, void*);
 
 static size_t qsort_r_partition(void* base, size_t size, __compar_d_fn_t compar, void* arg, size_t lo, size_t hi)
 {
-    void* tmp = malloc(size);
+    void* tmp = alloca(size);
     void* pivot = ((char*)base) + lo * size;
     size_t i = lo;
     for (size_t j = lo; j <= hi; j++)
@@ -1390,7 +1392,6 @@ static size_t qsort_r_partition(void* base, size_t size, __compar_d_fn_t compar,
     memcpy(tmp, base_i, size);
     memcpy(base_i, base_hi, size);
     memcpy(base_hi, tmp, size);
-    free(tmp);
     return i;
 }
 
@@ -1477,7 +1478,7 @@ EXPORT void* my_readdir(x86emu_t* emu, void* dirp)
         if(!f) {
             library_t* lib = my_lib;
             if(!lib) return NULL;
-            f = (pFp_t)dlsym(lib->priv.w.lib, "readdir");
+            f = (pFp_t)dlsym(lib->w.lib, "readdir");
         }
 
         return f(dirp);
@@ -1497,7 +1498,7 @@ EXPORT int32_t my_readdir_r(x86emu_t* emu, void* dirp, void* entry, void** resul
                 *result = NULL;
                 return 0;
             }
-            f = (iFppp_t)dlsym(lib->priv.w.lib, "readdir64_r");
+            f = (iFppp_t)dlsym(lib->w.lib, "readdir64_r");
         }
 
         int r = f(dirp, &d64, &dp64);
@@ -1533,7 +1534,7 @@ EXPORT int32_t my_readdir_r(x86emu_t* emu, void* dirp, void* entry, void** resul
                 *result = NULL;
                 return 0;
             }
-            f = (iFppp_t)dlsym(lib->priv.w.lib, "readdir_r");
+            f = (iFppp_t)dlsym(lib->w.lib, "readdir_r");
         }
 
         return f(dirp, entry, result);
@@ -1565,7 +1566,6 @@ EXPORT int32_t my_readlink(x86emu_t* emu, void* path, void* buf, uint32_t sz)
     }
     return readlink((const char*)path, (char*)buf, sz);
 }
-#ifndef NOALIGN
 
 static int nCPU = 0;
 static double bogoMips = 100.;
@@ -1576,23 +1576,34 @@ void grabNCpu() {
     size_t dummy;
     if(f) {
         nCPU = 0;
-        size_t len = 0;
-        char* line = NULL;
+        int bogo = 0;
+        size_t len = 500;
+        char* line = malloc(len);
         while ((dummy = getline(&line, &len, f)) != -1) {
             if(!strncmp(line, "processor\t", strlen("processor\t")))
                 ++nCPU;
-            if(!nCPU && !strncmp(line, "BogoMIPS\t", strlen("BogoMIPS\t"))) {
+            if(!bogo && !strncmp(line, "BogoMIPS\t", strlen("BogoMIPS\t"))) {
                 // grab 1st BogoMIPS
                 float tmp;
-                if(sscanf(line, "BogoMIPS\t: %g", &tmp)==1)
+                if(sscanf(line, "BogoMIPS\t: %g", &tmp)==1) {
                     bogoMips = tmp;
+                    bogo = 1;
+                }
             }
         }
-        if(line) free(line);
+        free(line);
         fclose(f);
         if(!nCPU) nCPU=1;
     }
 }
+int getNCpu()
+{
+    if(!nCPU)
+        grabNCpu();
+    return nCPU;
+}
+
+#ifndef NOALIGN
 void CreateCPUInfoFile(int fd)
 {
     size_t dummy;
@@ -1914,12 +1925,12 @@ EXPORT int my_mkstemps64(x86emu_t* emu, char* template, int suffixlen)
 {
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "mkstemps64");
+    void* f = dlsym(lib->w.lib, "mkstemps64");
     if(f)
         return ((iFpi_t)f)(template, suffixlen);
     // implement own version...
     // TODO: check size of template, and if really XXXXXX is there
-    char* fname = strdup(template);
+    char* fname = box_strdup(template);
     do {
         strcpy(fname, template);
         char num[8];
@@ -1927,7 +1938,7 @@ EXPORT int my_mkstemps64(x86emu_t* emu, char* template, int suffixlen)
         memcpy(fname+strlen(fname)-suffixlen-6, num, 6);
     } while(!FileExist(fname, -1));
     int ret = open64(fname, O_EXCL);
-    free(fname);
+    box_free(fname);
     return ret;
 }
 
@@ -1937,7 +1948,7 @@ EXPORT int32_t my_ftw(x86emu_t* emu, void* pathname, void* B, int32_t nopenfd)
     if(!f) {
         library_t* lib = my_lib;
         if(!lib) return 0;
-        f = (iFppi_t)dlsym(lib->priv.w.lib, "ftw");
+        f = (iFppi_t)dlsym(lib->w.lib, "ftw");
     }
 
     return f(pathname, findftwFct(B), nopenfd);
@@ -1949,7 +1960,7 @@ EXPORT int32_t my_nftw(x86emu_t* emu, void* pathname, void* B, int32_t nopenfd, 
     if(!f) {
         library_t* lib = my_lib;
         if(!lib) return 0;
-        f = (iFppii_t)dlsym(lib->priv.w.lib, "nftw");
+        f = (iFppii_t)dlsym(lib->w.lib, "nftw");
     }
 
     return f(pathname, findnftwFct(B), nopenfd, flags);
@@ -1994,7 +2005,7 @@ EXPORT int32_t my_glob(x86emu_t *emu, void* pat, int32_t flags, void* errfnc, vo
     if(!f) {
         library_t* lib = my_lib;
         if(!lib) return 0;
-        f = (iFpipp_t)dlsym(lib->priv.w.lib, "glob");
+        f = (iFpipp_t)dlsym(lib->w.lib, "glob");
     }
 
     return f(pat, flags, findgloberrFct(errfnc), pglob);
@@ -2018,7 +2029,7 @@ EXPORT int my_scandir(x86emu_t *emu, void* dir, void* namelist, void* sel, void*
     if(!f) {
         library_t* lib = my_lib;
         if(!lib) return 0;
-        f = (iFpppp_t)dlsym(lib->priv.w.lib, "scandir");
+        f = (iFpppp_t)dlsym(lib->w.lib, "scandir");
     }
 
     return f(dir, namelist, findfilter_dirFct(sel), findcompare_dirFct(comp));
@@ -2050,14 +2061,14 @@ EXPORT int32_t my_execv(x86emu_t* emu, const char* path, char* const argv[])
         int n=skip_first;
         while(argv[n]) ++n;
         int toadd = script?2:1;
-        const char** newargv = (const char**)calloc(n+toadd+1, sizeof(char*));
+        const char** newargv = (const char**)alloca((n+toadd+1)*sizeof(char*));
+        memset(newargv, 0, (n+toadd+1)*sizeof(char*));
         newargv[0] = x64?emu->context->box64path:emu->context->box86path;
         if(script) newargv[1] = emu->context->bashpath; // script needs to be launched with bash
         memcpy(newargv+toadd, argv+skip_first, sizeof(char*)*(n+1));
         if(self) newargv[1] = emu->context->fullpath; else newargv[1] = skip_first?argv[skip_first]:path;
         printf_log(LOG_DEBUG, " => execv(\"%s\", %p [\"%s\", \"%s\", \"%s\"...:%d])\n", emu->context->box86path, newargv, newargv[0], n?newargv[1]:"", (n>1)?newargv[2]:"",n);
         int ret = execv(newargv[0], (char* const*)newargv);
-        free(newargv);
         return ret;
     }
     return execv(path, argv);
@@ -2074,7 +2085,7 @@ EXPORT int32_t my_execve(x86emu_t* emu, const char* path, char* const argv[], ch
     if(envp == my_context->envv && environ) {
         envp = environ;
     }
-    printf_log(LOG_DEBUG, "execve(\"%s\", %p[\"%s\", \"%s\", \"%s\"...], %p) is x64=%d x86=%d script=%d (my_context->envv=%p, environ=%p\n", path, argv, argv[0], argv[1]?argv[1]:"(nil)", argv[2]?argv[2]:"(nil)", envp, x64, x86, script, my_context->envv, environ);
+    printf_log(/*LOG_DEBUG*/LOG_NONE, "execve(\"%s\", %p[\"%s\", \"%s\", \"%s\"...], %p) is x64=%d x86=%d script=%d (my_context->envv=%p, environ=%p\n", path, argv, argv[0], argv[1]?argv[1]:"(nil)", argv[2]?argv[2]:"(nil)", envp, x64, x86, script, my_context->envv, environ);
     if (x86 || x64 || self || script) {
         int skip_first = 0;
         if(strlen(path)>=strlen("wine-preloader") && strcmp(path+strlen(path)-strlen("wine-preloader"), "wine-preloader")==0)
@@ -2083,14 +2094,20 @@ EXPORT int32_t my_execve(x86emu_t* emu, const char* path, char* const argv[], ch
         int n=skip_first;
         while(argv[n]) ++n;
         int toadd = script?2:1;
-        const char** newargv = (const char**)calloc(n+1+toadd, sizeof(char*));
+        const char** newargv = (const char**)alloca((n+1+toadd-skip_first)*sizeof(char*));
+        memset(newargv, 0, (n+1+toadd)*sizeof(char*));
         newargv[0] = x64?emu->context->box64path:emu->context->box86path;
         if(script) newargv[1] = emu->context->bashpath; // script needs to be launched with bash
-        memcpy(newargv+toadd, argv+skip_first, sizeof(char*)*(n+1));
+        memcpy(newargv+toadd, argv+skip_first, sizeof(char*)*(n+1-skip_first));
         if(self) newargv[toadd] = emu->context->fullpath;
-        printf_log(LOG_DEBUG, " => execve(\"%s\", %p [\"%s\", \"%s\", \"%s\"...:%d])\n", emu->context->box86path, newargv, newargv[0], n?newargv[1]:"", (n>1)?newargv[2]:"",n);
+        else {
+            // TODO check if envp is not environ and add the value on a copy
+            if(strcmp(newargv[toadd], path))
+                setenv(x86?"BOX86_ARG0":"BOX64_ARG0", newargv[toadd], 1);
+            newargv[toadd] = path;
+        }
+        printf_log(LOG_DEBUG, " => execve(\"%s\", %p [\"%s\", \"%s\", \"%s\"...:%d], %p)\n", newargv[0], newargv, newargv[0], (n+toadd-skip_first)?newargv[1]:"", ((n+toadd-skip_first)>1)?newargv[2]:"",n, envp);
         int ret = execve(newargv[0], (char* const*)newargv, envp);
-        free(newargv);
         return ret;
     }
     if(!strcmp(path + strlen(path) - strlen("/uname"), "/uname")
@@ -2103,12 +2120,13 @@ EXPORT int32_t my_execve(x86emu_t* emu, const char* path, char* const argv[], ch
     }
     #ifndef NOALIGN
     if(!strcmp(path + strlen(path) - strlen("/grep"), "/grep")
-    && argv[1] && argv[2] && !strcmp(argv[2], "/proc/cpuinfo")) {
+    && argv[1] && argv[2] && (!strcmp(argv[2], "/proc/cpuinfo") || (argv[1][1]=='-' && argv[3] && !strcmp(argv[3], "/proc/cpuinfo")))) {
         // special case of a bash script shell running grep on cpuinfo to extract capacities...
+        int cpuinfo = strcmp(argv[2], "/proc/cpuinfo")?3:2;
         int n=0;
         while(argv[n]) ++n;
-        const char** newargv = (const char**)calloc(n+1, sizeof(char*));
-        memcpy(newargv, argv, sizeof(char*)*(n));
+        const char** newargv = (const char**)alloca((n+1)*sizeof(char*));
+        memcpy(newargv, argv, sizeof(char*)*(n+1));
         // create a dummy cpuinfo in temp (that will stay there, sorry)
         const char* tmpdir = GetTmpDir();
         char template[100] = {0};
@@ -2121,10 +2139,34 @@ EXPORT int32_t my_execve(x86emu_t* emu, const char* path, char* const argv[], ch
         int rl = readlink(template, cpuinfo_file, sizeof(cpuinfo_file));
         close(fd);
         chmod(cpuinfo_file, 0666);
-        newargv[2] = cpuinfo_file;
+        newargv[cpuinfo] = cpuinfo_file;
         printf_log(LOG_DEBUG, " => execve(\"%s\", %p [\"%s\", \"%s\", \"%s\"...:%d], %p)\n", path, newargv, newargv[0], newargv[1], newargv[2],n, envp);
         int ret = execve(path, (char* const*)newargv, envp);
-        free(newargv);
+        return ret;
+    }
+    if(!strcmp(path + strlen(path) - strlen("/cat"), "/cat")
+    && argv[1] && !strcmp(argv[1], "/proc/cpuinfo")) {
+        // special case of a bash script shell running grep on cpuinfo to extract capacities...
+        int cpuinfo = 1;
+        int n=0;
+        while(argv[n]) ++n;
+        const char** newargv = (const char**)alloca((n+1)*sizeof(char*));
+        memcpy(newargv, argv, sizeof(char*)*(n+1));
+        // create a dummy cpuinfo in temp (that will stay there, sorry)
+        const char* tmpdir = GetTmpDir();
+        char template[100] = {0};
+        sprintf(template, "%s/box86cpuinfoXXXXXX", tmpdir);
+        int fd = mkstemp(template);
+        CreateCPUInfoFile(fd);
+        // get back the name
+        char cpuinfo_file[100] = {0};
+        sprintf(template, "/proc/self/fd/%d", fd);
+        int rl = readlink(template, cpuinfo_file, sizeof(cpuinfo_file));
+        close(fd);
+        chmod(cpuinfo_file, 0666);
+        newargv[cpuinfo] = cpuinfo_file;
+        printf_log(LOG_DEBUG, " => execve(\"%s\", %p [\"%s\", \"%s\", \"%s\"...:%d], %p)\n", path, newargv, newargv[0], newargv[1], newargv[2],n, envp);
+        int ret = execve(path, (char* const*)newargv, envp);
         return ret;
     }
     #endif
@@ -2149,7 +2191,8 @@ EXPORT int32_t my_execvp(x86emu_t* emu, const char* path, char* const argv[])
         int i=0;
         while(argv[i]) ++i;
         int toadd = script?2:1;
-        char** newargv = (char**)calloc(i+toadd+1, sizeof(char*));
+        char** newargv = (char**)alloca((i+toadd+1)*sizeof(char*));
+        memset(newargv, 0, (i+toadd+1)*sizeof(char*));
         newargv[0] = x64?emu->context->box64path:emu->context->box86path;
         if(script) newargv[1] = emu->context->bashpath; // script needs to be launched with bash
         for (int j=0; j<i; ++j)
@@ -2158,11 +2201,10 @@ EXPORT int32_t my_execvp(x86emu_t* emu, const char* path, char* const argv[])
         if(script) newargv[2] = emu->context->bashpath;
         printf_log(LOG_DEBUG, " => execvp(\"%s\", %p [\"%s\", \"%s\"...:%d])\n", newargv[0], newargv, newargv[1], i?newargv[2]:"", i);
         int ret = execvp(newargv[0], newargv);
-        free(newargv);
-        free(fullpath);
+        box_free(fullpath);
         return ret;
     }
-    free(fullpath);
+    box_free(fullpath);
     if((!strcmp(path + strlen(path) - strlen("/uname"), "/uname") || !strcmp(path, "uname"))
      && argv[1] && (!strcmp(argv[1], "-m") || !strcmp(argv[1], "-p") || !strcmp(argv[1], "-i"))
      && !argv[2]) {
@@ -2194,7 +2236,8 @@ EXPORT int32_t my_posix_spawnp(x86emu_t* emu, pid_t* pid, const char* path,
         int i=0;
         while(argv[i]) ++i;
         int toadd = script?2:1;
-        char** newargv = (char**)calloc(i+toadd+1, sizeof(char*));
+        char** newargv = (char**)alloca((i+toadd+1)*sizeof(char*));
+        memset(newargv, 0, (i+toadd+1)*sizeof(char*));
         newargv[0] = x64?emu->context->box64path:emu->context->box86path;
         if(script) newargv[1] = emu->context->bashpath; // script needs to be launched with bash
         for (int j=0; j<i; ++j)
@@ -2204,10 +2247,9 @@ EXPORT int32_t my_posix_spawnp(x86emu_t* emu, pid_t* pid, const char* path,
         printf_log(LOG_DEBUG, " => posix_spawnp(%p, \"%s\", %p, %p, %p [\"%s\", \"%s\"...:%d], %p)\n", pid, newargv[0], actions, attrp, newargv, newargv[1], i?newargv[2]:"", i, envp);
         ret = posix_spawnp(pid, newargv[0], actions, attrp, newargv, envp);
         printf_log(LOG_DEBUG, "posix_spawnp returned %d\n", ret);
-        //free(newargv);
     } else 
         ret = posix_spawnp(pid, fullpath, actions, attrp, argv, envp);
-    free(fullpath);
+    box_free(fullpath);
     return ret;
 }
 
@@ -2235,7 +2277,7 @@ EXPORT int32_t my_getrandom(x86emu_t* emu, void* buf, uint32_t buflen, uint32_t 
     // not always implemented on old linux version...
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "getrandom");
+    void* f = dlsym(lib->w.lib, "getrandom");
     if(f)
         return ((iFpuu_t)f)(buf, buflen, flags);
     // do what should not be done, but it's better then nothing....
@@ -2251,7 +2293,7 @@ EXPORT void* my_getpwuid(x86emu_t* emu, uint32_t uid)
     void *ret = NULL;
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "getpwuid");
+    void* f = dlsym(lib->w.lib, "getpwuid");
     if(f)
         ret = ((pFu_t)f)(uid);
     
@@ -2274,7 +2316,7 @@ EXPORT int32_t my_recvmmsg(x86emu_t* emu, int32_t fd, void* msgvec, uint32_t vle
     // Implemented starting glibc 2.12+
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "recvmmsg");
+    void* f = dlsym(lib->w.lib, "recvmmsg");
     if(f)
         return ((iFipuup_t)f)(fd, msgvec, vlen, flags, timeout);
     // Use the syscall
@@ -2286,7 +2328,7 @@ EXPORT int32_t my___sendmmsg(x86emu_t* emu, int32_t fd, void* msgvec, uint32_t v
     // Implemented starting glibc 2.14+
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "__sendmmsg");
+    void* f = dlsym(lib->w.lib, "__sendmmsg");
     if(f)
         return ((iFipuu_t)f)(fd, msgvec, vlen, flags);
     // Use the syscall
@@ -2298,7 +2340,7 @@ EXPORT int32_t my___register_atfork(x86emu_t *emu, void* prepare, void* parent, 
     // this is partly incorrect, because the emulated funcionts should be executed by actual fork and not by my_atfork...
     if(my_context->atfork_sz==my_context->atfork_cap) {
         my_context->atfork_cap += 4;
-        my_context->atforks = (atfork_fnc_t*)realloc(my_context->atforks, my_context->atfork_cap*sizeof(atfork_fnc_t));
+        my_context->atforks = (atfork_fnc_t*)box_realloc(my_context->atforks, my_context->atfork_cap*sizeof(atfork_fnc_t));
     }
     my_context->atforks[my_context->atfork_sz].prepare = (uintptr_t)prepare;
     my_context->atforks[my_context->atfork_sz].parent = (uintptr_t)parent;
@@ -2330,7 +2372,7 @@ EXPORT int32_t my_fcntl64(x86emu_t* emu, int32_t a, int32_t b, uint32_t d1, uint
     // Implemented starting glibc 2.14+
     library_t* lib = my_lib;
     if(!lib) return 0;
-    iFiiV_t f = dlsym(lib->priv.w.lib, "fcntl64");
+    iFiiV_t f = dlsym(lib->w.lib, "fcntl64");
     if(b==F_SETFL)
         d1 = of_convert(d1);
     if(b==F_GETLK64 || b==F_SETLK64 || b==F_SETLKW64)
@@ -2384,7 +2426,7 @@ EXPORT int32_t my_preadv64(x86emu_t* emu, int32_t fd, void* v, int32_t c, int64_
 {
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "preadv64");
+    void* f = dlsym(lib->w.lib, "preadv64");
     if(f)
         return ((iFipiI_t)f)(fd, v, c, o);
     return syscall(__NR_preadv, fd, v, c,(uint32_t)(o&0xffffffff), (uint32_t)((o>>32)&0xffffffff));
@@ -2394,7 +2436,7 @@ EXPORT int32_t my_pwritev64(x86emu_t* emu, int32_t fd, void* v, int32_t c, int64
 {
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "pwritev64");
+    void* f = dlsym(lib->w.lib, "pwritev64");
     if(f)
         return ((iFipiI_t)f)(fd, v, c, o);
     #ifdef __arm__
@@ -2409,7 +2451,7 @@ EXPORT int32_t my_accept4(x86emu_t* emu, int32_t fd, void* a, void* l, int32_t f
 {
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "accept4");
+    void* f = dlsym(lib->w.lib, "accept4");
     if(f)
         return ((iFippi_t)f)(fd, a, l, flags);
     if(!flags)
@@ -2423,7 +2465,7 @@ EXPORT  int32_t my_fallocate64(int fd, int mode, int64_t offs, int64_t len)
     static int done = 0;
     if(!done) {
         library_t* lib = my_lib;
-        f = (iFiiII_t)dlsym(lib->priv.w.lib, "fallocate64");
+        f = (iFiiII_t)dlsym(lib->w.lib, "fallocate64");
         done = 1;
     }
     if(f)
@@ -2569,6 +2611,10 @@ EXPORT int32_t my___sigsetjmp(x86emu_t* emu, /*struct __jmp_buf_tag __env[1]*/vo
         ((__jmp_buf_tag_t*)p)->__mask_was_saved = 0;
     return 0;
 }
+EXPORT int32_t my_sigsetjmp(x86emu_t* emu, /*struct __jmp_buf_tag __env[1]*/void *p, int savesigs)
+{
+    return my___sigsetjmp(emu, p, savesigs);
+}
 
 EXPORT int32_t my__setjmp(x86emu_t* emu, /*struct __jmp_buf_tag __env[1]*/void *p)
 {
@@ -2623,15 +2669,6 @@ EXPORT void* my_mmap(x86emu_t* emu, void *addr, unsigned long length, int prot, 
     if(!addr && ret!=new_addr && ret!=(void*)-1) {
         munmap(ret, length);
         loadProtectionFromMap();    // reload map, because something went wrong previously
-        new_addr = findBlockNearHint(addr, length); // is this the best way?
-        ret = mmap(new_addr, length, prot, flags, fd, offset);
-    }
-    #endif
-    if(box86_log<LOG_DEBUG) {dynarec_log(LOG_DEBUG, "%p\n", ret);}
-    #ifdef DYNAREC
-    if(!addr && ret!=new_addr && ret!=(void*)-1) {
-        munmap(ret, length);
-        loadProtectionFromMap();    // reload map, because something went wrong previously
         new_addr = findBlockNearHint(addr, length);
         ret = mmap(new_addr, length, prot, flags, fd, offset);
     } else if(addr && ret!=(void*)-1 && ret!=new_addr && 
@@ -2650,6 +2687,21 @@ EXPORT void* my_mmap(x86emu_t* emu, void *addr, unsigned long length, int prot, 
                 munmap(ret, length);
                 ret = (void*)-1;
             }
+        }
+    }
+    #endif
+    if(box86_log<LOG_DEBUG) {dynarec_log(LOG_DEBUG, "%p\n", ret);}
+    #ifdef DYNAREC
+    if(box86_dynarec && ret!=(void*)-1) {
+        if(flags&0x100000 && addr!=ret)
+        {
+            // program used MAP_FIXED_NOREPLACE but the host linux didn't support it
+            // and responded with a different address, so ignore it
+        } else {
+            if(prot& PROT_EXEC)
+                addDBFromAddressRange((uintptr_t)ret, length);
+            else
+                cleanDBFromAddressRange((uintptr_t)ret, length, prot?0:1);
         }
     }
     #endif
@@ -2673,7 +2725,7 @@ EXPORT void* my_mmap64(x86emu_t* emu, void *addr, unsigned long length, int prot
     if(!addr && ret!=new_addr && ret!=(void*)-1) {
         munmap(ret, length);
         loadProtectionFromMap();    // reload map, because something went wrong previously
-        new_addr = findBlockNearHint(addr, length);
+        new_addr = (flags&MAP_FIXED)?addr:(addr?findBlockNearHint(addr, length):find32bitBlock(length));
         ret = mmap64(new_addr, length, prot, flags, fd, offset);
     } else if(addr && ret!=(void*)-1 && ret!=new_addr && 
       ((uintptr_t)ret&0xffff) && !(flags&MAP_FIXED) && box86_wine) {
@@ -2716,7 +2768,7 @@ EXPORT void* my_mmap64(x86emu_t* emu, void *addr, unsigned long length, int prot
 
 EXPORT void* my_mremap(x86emu_t* emu, void* old_addr, size_t old_size, size_t new_size, int flags, void* new_addr)
 {
-    dynarec_log(/*LOG_DEBUG*/LOG_NONE, "mremap(%p, %u, %u, %d, %p)=>", old_addr, old_size, new_size, flags, new_addr);
+    dynarec_log(/*LOG_DEBUG*/LOG_NONE, "mremap(%p, 0x%x, 0x%x, %d, %p)=>", old_addr, old_size, new_size, flags, new_addr);
     void* ret = mremap(old_addr, old_size, new_size, flags, new_addr);
     dynarec_log(/*LOG_DEBUG*/LOG_NONE, "%p\n", ret);
     if(ret==(void*)-1)
@@ -2867,7 +2919,7 @@ EXPORT int my___libc_alloca_cutoff(x86emu_t* emu, size_t size)
     // not always implemented on old linux version...
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "__libc_alloca_cutoff");
+    void* f = dlsym(lib->w.lib, "__libc_alloca_cutoff");
     if(f)
         return ((iFL_t)f)(size);
     // approximate version but it's better than nothing....
@@ -2935,14 +2987,13 @@ EXPORT int my_renameat2(int olddirfd, void* oldpath, int newdirfd, void* newpath
     }
     if((flags&RENAME_EXCHANGE) && (olddirfd==-1) && (newdirfd==-1)) {
         // cannot do atomically...
-        char* tmp = (char*)malloc(strlen(oldpath)+10); // create a temp intermediary
+        char* tmp = (char*)alloca(strlen(oldpath)+10); // create a temp intermediary
         tmp = strcat(oldpath, ".tmp");
         int ret = renameat(-1, oldpath, -1, tmp);
         if(ret==-1) return -1;
         ret = renameat(-1, newpath, -1, oldpath);
         if(ret==-1) return -1;
         ret = renameat(-1, tmp, -1, newpath);
-        free(tmp);
         return ret;
     }
     return -1; // unknown flags
@@ -2972,7 +3023,7 @@ EXPORT int my_getentropy(x86emu_t* emu, void* buffer, size_t length)
 {
     library_t* lib = my_lib;
     if(!lib) return 0;
-    void* f = dlsym(lib->priv.w.lib, "getentropy");
+    void* f = dlsym(lib->w.lib, "getentropy");
     if(f)
         return ((iFpL_t)f)(buffer, length);
     // custom implementation
@@ -3051,14 +3102,15 @@ EXPORT int my_prctl(x86emu_t* emu, int option, unsigned long arg2, unsigned long
 {
     if(option==PR_SET_NAME) {
         printf_log(LOG_DEBUG, "BOX86: set process name to \"%s\"\n", (char*)arg2);
-#ifdef DYNAREC
-        if(!strcmp((char*)arg2, "Crysis.exe")) {
-            printf_log(LOG_INFO, "Crysis detected, forcing Dynarec X87 Double\n");
-            box86_dynarec_x87double = 1;
-        }
-#endif
+        ApplyParams((char*)arg2);
     }
     return prctl(option, arg2, arg3, arg4, arg5);
+}
+
+EXPORT void* my_mallinfo(x86emu_t* emu, void* p)
+{
+    *(struct mallinfo*)p=mallinfo();
+    return p;
 }
 
 EXPORT char** my_environ = NULL;
@@ -3072,7 +3124,7 @@ EXPORT char* my_program_invocation_short_name = NULL;
 
 #define PRE_INIT\
     if(1)                                                           \
-        lib->priv.w.lib = dlopen(NULL, RTLD_LAZY | RTLD_GLOBAL);    \
+        lib->w.lib = dlopen(NULL, RTLD_LAZY | RTLD_GLOBAL);    \
     else
 
 #ifdef ANDROID

@@ -15,9 +15,13 @@ typedef void (*vFpp_t)(void*, void*);
 typedef void* (*pFpp_t)(void*, void*);
 typedef void (*vFpUp_t)(void*, uint64_t, void*);
 typedef void (*vFppp_t)(void*, void*, void*);
+typedef void (*vFpPp_t)(void*, void*, void*);
 typedef int32_t (*iFpUp_t)(void*, uint64_t, void*);
 typedef int32_t (*iFppp_t)(void*, void*, void*);
+typedef int32_t (*iFpPp_t)(void*, void*, void*);
 typedef int32_t (*iFPpp_t)(void*, void*, void*);
+typedef void (*vFpPpp_t)(void*, void*, void*, void*);
+typedef int32_t (*iFpupU_t)(void*, uint32_t, void*, uint64_t);
 typedef int32_t (*iFpUup_t)(void*, uint64_t, uint32_t, void*);
 typedef int32_t (*iFpUpP_t)(void*, uint64_t, void*, void*);
 typedef int32_t (*iFpppp_t)(void*, void*, void*, void*);
@@ -34,6 +38,8 @@ typedef void (*vFpiiiupupup_t)(void*, int32_t, int32_t, int32_t, uint32_t, void*
 	GO(vkDestroyInstance, vFpp_t) \
 	GO(vkGetPhysicalDeviceMemoryProperties, vFpp_t) \
 	GO(vkGetPhysicalDeviceProperties, vFpp_t) \
+	GO(vkGetPhysicalDeviceProperties2, vFpp_t) \
+	GO(vkGetPhysicalDeviceProperties2KHR, vFpp_t) \
 	GO(vkGetDeviceProcAddr, pFpp_t) \
 	GO(vkGetInstanceProcAddr, pFpp_t) \
 	GO(vkDestroyBuffer, vFpUp_t) \
@@ -48,9 +54,12 @@ typedef void (*vFpiiiupupup_t)(void*, int32_t, int32_t, int32_t, uint32_t, void*
 	GO(vkDestroyFramebuffer, vFpUp_t) \
 	GO(vkDestroyImage, vFpUp_t) \
 	GO(vkDestroyImageView, vFpUp_t) \
+	GO(vkDestroyOpticalFlowSessionNV, vFpUp_t) \
 	GO(vkDestroyPipeline, vFpUp_t) \
 	GO(vkDestroyPipelineCache, vFpUp_t) \
 	GO(vkDestroyPipelineLayout, vFpUp_t) \
+	GO(vkDestroyPrivateDataSlot, vFpUp_t) \
+	GO(vkDestroyPrivateDataSlotEXT, vFpUp_t) \
 	GO(vkDestroyQueryPool, vFpUp_t) \
 	GO(vkDestroyRenderPass, vFpUp_t) \
 	GO(vkDestroySampler, vFpUp_t) \
@@ -61,10 +70,22 @@ typedef void (*vFpiiiupupup_t)(void*, int32_t, int32_t, int32_t, uint32_t, void*
 	GO(vkDestroySwapchainKHR, vFpUp_t) \
 	GO(vkDestroyValidationCacheEXT, vFpUp_t) \
 	GO(vkDestroyDebugUtilsMessengerEXT, vFppp_t) \
+	GO(vkGetImageMemoryRequirements2, vFpPp_t) \
+	GO(vkGetImageMemoryRequirements2KHR, vFpPp_t) \
 	GO(vkFreeMemory, iFpUp_t) \
+	GO(vkGetPhysicalDeviceSurfaceCapabilities2EXT, iFpUp_t) \
 	GO(vkDestroyDebugReportCallbackEXT, iFppp_t) \
 	GO(vkGetPhysicalDeviceDisplayPropertiesKHR, iFppp_t) \
+	GO(vkGetBufferMemoryRequirements2, iFpPp_t) \
+	GO(vkGetBufferMemoryRequirements2KHR, iFpPp_t) \
+	GO(vkGetPhysicalDeviceImageFormatProperties2, iFpPp_t) \
+	GO(vkGetPhysicalDeviceImageFormatProperties2KHR, iFpPp_t) \
+	GO(vkGetPhysicalDeviceSurfaceCapabilities2KHR, iFpPp_t) \
 	GO(vkCreateInstance, iFPpp_t) \
+	GO(vkGetDeviceImageSparseMemoryRequirements, vFpPpp_t) \
+	GO(vkGetDeviceImageSparseMemoryRequirementsKHR, vFpPpp_t) \
+	GO(vkQueueSubmit2, iFpupU_t) \
+	GO(vkQueueSubmit2KHR, iFpupU_t) \
 	GO(vkGetDisplayPlaneCapabilitiesKHR, iFpUup_t) \
 	GO(vkGetPastPresentationTimingGOOGLE, iFpUpP_t) \
 	GO(vkCreateDebugReportCallbackEXT, iFpppp_t) \
@@ -86,8 +107,11 @@ typedef void (*vFpiiiupupup_t)(void*, int32_t, int32_t, int32_t, uint32_t, void*
 	GO(vkCreateHeadlessSurfaceEXT, iFpPpp_t) \
 	GO(vkCreateImage, iFpPpp_t) \
 	GO(vkCreateImageView, iFpPpp_t) \
+	GO(vkCreateOpticalFlowSessionNV, iFpPpp_t) \
 	GO(vkCreatePipelineCache, iFpPpp_t) \
 	GO(vkCreatePipelineLayout, iFpPpp_t) \
+	GO(vkCreatePrivateDataSlot, iFpPpp_t) \
+	GO(vkCreatePrivateDataSlotEXT, iFpPpp_t) \
 	GO(vkCreateQueryPool, iFpPpp_t) \
 	GO(vkCreateRenderPass, iFpPpp_t) \
 	GO(vkCreateRenderPass2, iFpPpp_t) \
@@ -101,6 +125,7 @@ typedef void (*vFpiiiupupup_t)(void*, int32_t, int32_t, int32_t, uint32_t, void*
 	GO(vkCreateValidationCacheEXT, iFpPpp_t) \
 	GO(vkCreateXcbSurfaceKHR, iFpPpp_t) \
 	GO(vkCreateXlibSurfaceKHR, iFpPpp_t) \
+	GO(vkGetPhysicalDeviceOpticalFlowImageFormatsNV, iFpPpp_t) \
 	GO(vkRegisterDeviceEventEXT, iFpPpp_t) \
 	GO(vkUpdateDescriptorSets, vFpupup_t) \
 	GO(vkCreateSharedSwapchainsKHR, iFpuppp_t) \

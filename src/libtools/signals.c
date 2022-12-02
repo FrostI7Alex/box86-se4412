@@ -270,7 +270,7 @@ struct kernel_sigaction {
 static void sigstack_destroy(void* p)
 {
 	i386_stack_t *ss = (i386_stack_t*)p;
-    free(ss);
+    box_free(ss);
 }
 
 static pthread_key_t sigstack_key;
@@ -366,31 +366,6 @@ EXPORT int my_sigaltstack(x86emu_t* emu, const i386_stack_t* ss, i386_stack_t* o
         return -1;
     }
 	i386_stack_t *new_ss = (i386_stack_t*)pthread_getspecific(sigstack_key);
-    if(!ss) {
-        if(!new_ss) {
-            oss->ss_flags = SS_DISABLE;
-            oss->ss_sp = emu->init_stack;
-            oss->ss_size = emu->size_stack;
-        } else {
-            oss->ss_flags = new_ss->ss_flags;
-            oss->ss_sp = new_ss->ss_sp;
-            oss->ss_size = new_ss->ss_size;
-        }
-        return 0;
-    }
-    printf_log(LOG_DEBUG, "%04d|sigaltstack called ss=%p[flags=0x%x, sp=%p, ss=0x%x], oss=%p\n", GetTID(), ss, ss->ss_flags, ss->ss_sp, ss->ss_size, oss);
-    if(ss->ss_flags && ss->ss_flags!=SS_DISABLE && ss->ss_flags!=SS_ONSTACK) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if(ss->ss_flags==SS_DISABLE) {
-        if(new_ss)
-            free(new_ss);
-        pthread_setspecific(sigstack_key, NULL);
-
-        return 0;
-    }
     if(oss) {
         if(!new_ss) {
             oss->ss_flags = SS_DISABLE;
@@ -402,8 +377,25 @@ EXPORT int my_sigaltstack(x86emu_t* emu, const i386_stack_t* ss, i386_stack_t* o
             oss->ss_size = new_ss->ss_size;
         }
     }
+    if(!ss) {
+        return 0;
+    }
+    printf_log(LOG_DEBUG, "%04d|sigaltstack called ss=%p[flags=0x%x, sp=%p, ss=0x%x], oss=%p\n", GetTID(), ss, ss->ss_flags, ss->ss_sp, ss->ss_size, oss);
+    if(ss->ss_flags && ss->ss_flags!=SS_DISABLE && ss->ss_flags!=SS_ONSTACK) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if(ss->ss_flags==SS_DISABLE) {
+        if(new_ss)
+            box_free(new_ss);
+        pthread_setspecific(sigstack_key, NULL);
+
+        return 0;
+    }
     if(!new_ss)
-        new_ss = (i386_stack_t*)calloc(1, sizeof(i386_stack_t));
+        new_ss = (i386_stack_t*)box_calloc(1, sizeof(i386_stack_t));
+    new_ss->ss_flags = 0;
     new_ss->ss_sp = ss->ss_sp;
     new_ss->ss_size = ss->ss_size;
 
@@ -571,7 +563,8 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
         sigcontext->uc_stack.ss_sp = new_ss->ss_sp;
         sigcontext->uc_stack.ss_size = new_ss->ss_size;
         sigcontext->uc_stack.ss_flags = new_ss->ss_flags;
-    }
+    } else
+        sigcontext->uc_stack.ss_flags = SS_DISABLE;
     // Try to guess some REG_TRAPNO
     /*
     TRAP_x86_DIVIDE     = 0,   // Division by zero exception
@@ -638,6 +631,8 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
     else
         ret = RunFunctionHandler(&exits, sigcontext, my_context->signals[sig], 3, sig, info2, sigcontext);
     // restore old value from emu
+    if(used_stack)  // release stack
+        new_ss->ss_flags = 0;
     #define GO(R) R_##R = old_##R
     GO(EAX);
     GO(ECX);
@@ -709,8 +704,6 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
     }
     if(restorer)
         RunFunctionHandler(&exits, NULL, restorer, 0);
-    if(used_stack)  // release stack
-        new_ss->ss_flags = 0;
     relockMutex(Locks);
 }
 
@@ -750,6 +743,16 @@ void my_box86signalhandler(int32_t sig, siginfo_t* info, void * ucntx)
         db = FindDynablockFromNativeAddress(pc);
         db_searched = 1;
         dynarec_log(LOG_INFO/*LOG_DEBUG*/, "SIGSEGV with Access error on %p for %p , db=%p(%p)\n", pc, addr, db, db?((void*)db->x86_addr):NULL);
+        static uintptr_t repeated_page = 0;
+        static int repeated_count = 0;
+        if(repeated_page == ((uintptr_t)addr&~0xfff)) {
+            ++repeated_count;   // Access eoor multiple time on same page, disable dynarec on this page a few time...
+            dynarec_log(LOG_DEBUG, "Detecting a Hotpage at %p (%d)\n", (void*)repeated_page, repeated_count);
+            AddHotPage(repeated_page);
+        } else {
+            repeated_page = (uintptr_t)addr&~0xfff;
+            repeated_count = 0;
+        }
         if(db && ((addr>=db->x86_addr && addr<(db->x86_addr+db->x86_size)) || db->need_test)) {
             // dynablock got auto-dirty! need to get out of it!!!
             emu_jmpbuf_t* ejb = GetJmpBuf();
@@ -887,13 +890,7 @@ exit(-1);
             }
         }
         if(cycle_log) {
-            int j = (my_context->current_line+1)&(CYCLE_LOG-1);
-            for (int i=0; i<CYCLE_LOG; ++i) {
-                int k = (i+j)&(CYCLE_LOG-1);
-                if(my_context->log_call[k][0]) {
-                    printf_log(log_minimum, "%s => return %s\n", my_context->log_call[k], my_context->log_ret[k]);
-                }
-            }
+            print_cycle_log(log_minimum);
         }
 #ifdef DYNAREC
         uint32_t hash = 0;
@@ -933,7 +930,7 @@ exit(-1);
         else
             printf_log(log_minimum, "\n");
 #ifndef ANDROID
-        if(box86_backtrace && (log_minimum<=box86_log)) {
+        if(box86_showbt && (log_minimum<=box86_log)) {
             int nptrs;
             void *buffer[200];
             char **strings;
@@ -943,7 +940,7 @@ exit(-1);
             strings = backtrace_symbols(buffer, nptrs);
             for(int j=0; j<nptrs; j++)
                 printf_log(LOG_NONE, "\t%s\n", strings[j]);
-            free(strings);
+            box_free(strings);
 
         }
 #endif

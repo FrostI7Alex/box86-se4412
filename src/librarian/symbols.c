@@ -41,7 +41,7 @@ void FreeMapSymbols(kh_mapsymbols_t** map)
     if(!map || !(*map))
         return;
     versymbols_t *v;
-    kh_foreach_value_ref(*map, v, free(v->syms););
+    kh_foreach_value_ref(*map, v, box_free(v->syms););
 
     kh_destroy(mapsymbols, *map);
     *map = NULL;
@@ -58,86 +58,90 @@ static int SameVersion(versymbol_t* s, int ver, const char* vername)
     
 }
 
-static versymbol_t* FindVersionLocal(versymbols_t* s)
+static versymbol_t* FindVersionLocal(versymbols_t* s, size_t size)
 {
     if(!s || !s->sz)
         return NULL;
     for (int i=0; i<s->sz; ++i)
-        if(s->syms[i].version==0)
+        if(s->syms[i].version==0 && (!size || (size==s->syms[i].sym.sz)))
             return &s->syms[i];
     return NULL;
 }
-static versymbol_t* FindNoVersion(versymbols_t* s)
+static versymbol_t* FindNoVersion(versymbols_t* s, size_t size)
 {
     if(!s || !s->sz)
         return NULL;
     for (int i=0; i<s->sz; ++i)
-        if(s->syms[i].version==-1)
+        if(s->syms[i].version==-1 && (!size || (size==s->syms[i].sym.sz)))
             return &s->syms[i];
     return NULL;
 }
-static versymbol_t* FindVersionGlobal(versymbols_t* s)
+static versymbol_t* FindVersionGlobal(versymbols_t* s, size_t size)
 {
     if(!s || !s->sz)
         return NULL;
     for (int i=0; i<s->sz; ++i)
-        if(s->syms[i].version==1)
+        if(s->syms[i].version==1 && (!size || (size==s->syms[i].sym.sz)))
             return &s->syms[i];
     return NULL;
 }
-static versymbol_t* FindVersion(versymbols_t* s, const char* vername)
+static versymbol_t* FindVersion(versymbols_t* s, size_t size, const char* vername)
 {
     if(!s || !s->sz)
         return NULL;
     for (int i=0; i<s->sz; ++i)
-        if(s->syms[i].vername && !strcmp(s->syms[i].vername, vername))
+        if(s->syms[i].vername && !strcmp(s->syms[i].vername, vername) && (!size || (size==s->syms[i].sym.sz)))
             return &s->syms[i];
     return NULL;
 }
-static versymbol_t* FindFirstVersion(versymbols_t* s)
+static versymbol_t* FindFirstVersion(versymbols_t* s, size_t size)
 {
     if(!s || !s->sz)
         return NULL;
     for (int i=0; i<s->sz; ++i)
-        if(s->syms[i].version>1)
+        if(s->syms[i].version>1 && (!size || (size==s->syms[i].sym.sz)))
             return &s->syms[i];
     return NULL;
 }
 
 // Match version (so ver=0:0, ver=1:-1/1/X, ver=-1:any, ver=X:1/"name")
-static versymbol_t* MatchVersion(versymbols_t* s, int ver, const char* vername, int local)
+static versymbol_t* MatchVersion(versymbols_t* s, int ver, const char* vername, size_t size, int local, const char* defver)
 {
     if(!s || !s->sz)
         return NULL;
     versymbol_t* ret = NULL;
     if(ver==0) {
-        if(local) ret = FindVersionLocal(s);
-        if(!ret) ret = FindNoVersion(s);
-        if(!ret) ret = FindVersionGlobal(s);
+        if(local) ret = FindVersionLocal(s, size);
+        if(!ret) ret = FindNoVersion(s, size);
+        if(!ret) ret = FindVersionGlobal(s, size);
+        if(!ret && defver) ret = FindVersion(s, size, defver);
         return ret;
     }
     if(ver==-1) {
-        if(local) ret = FindVersionLocal(s);
-        if(!ret) ret = FindNoVersion(s);
-        if(!ret) ret = FindVersionGlobal(s);
-        if(!ret) ret = FindFirstVersion(s);
+        if(local) ret = FindVersionLocal(s, size);
+        if(!ret) ret = FindNoVersion(s, size);
+        if(!ret) ret = FindVersionGlobal(s, size);
+        if(!ret && defver) ret = FindVersion(s, size, defver);
+        //if(!ret) ret = FindFirstVersion(s);
         return ret;
     }
     if(ver==-2) {
-        if(local) ret = FindVersionLocal(s);
-        if(!ret) ret = FindVersionGlobal(s);
+        if(local) ret = FindVersionLocal(s, size);
+        if(!ret) ret = FindVersionGlobal(s, size);
         return ret;
     }
     if(ver==1) {
-        if(local) ret = FindVersionLocal(s);
-        if(!ret) ret = FindVersionGlobal(s);
-        if(!ret) ret = FindNoVersion(s);
-        if(!ret) ret = FindFirstVersion(s);
+        if(local) ret = FindVersionLocal(s, size);
+        if(!ret) ret = FindVersionGlobal(s, size);
+        if(!ret) ret = FindNoVersion(s, size);
+        if(!ret && defver) ret = FindVersion(s, size, defver);
+        //if(!ret) ret = FindFirstVersion(s);
         return ret;
     }
-    ret = FindVersion(s, vername);
-    if(local && !ret) FindVersionLocal(s);
-    if(!ret) return FindVersionGlobal(s);
+    ret = FindVersion(s, size, vername);
+    if(local && !ret) ret = FindVersionLocal(s, size);
+    if(!ret && defver && vername && !strcmp(defver, vername)) ret = FindVersionGlobal(s, size);
+    //if(!ret) return FindVersionGlobal(s);
     return ret;
 }
 
@@ -157,7 +161,7 @@ void AddSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr, ui
     // add a new record
     if(v->sz == v->cap) {
         v->cap+=4;
-        v->syms = (versymbol_t*)realloc(v->syms, v->cap*sizeof(versymbol_t));
+        v->syms = (versymbol_t*)box_realloc(v->syms, v->cap*sizeof(versymbol_t));
     }
     int idx = v->sz++;
     v->syms[idx].version = ver;
@@ -166,7 +170,7 @@ void AddSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr, ui
     v->syms[idx].sym.sz = sz;
 }
 
-uintptr_t FindSymbol(kh_mapsymbols_t *mapsymbols, const char* name, int ver, const char* vername, int local)
+uintptr_t FindSymbol(kh_mapsymbols_t *mapsymbols, const char* name, int ver, const char* vername, int local, const char* defver)
 {
     if(!mapsymbols)
         return 0;
@@ -174,13 +178,13 @@ uintptr_t FindSymbol(kh_mapsymbols_t *mapsymbols, const char* name, int ver, con
     if(k==kh_end(mapsymbols))
         return 0;
     versymbols_t * v = &kh_val(mapsymbols, k);
-    versymbol_t * s = MatchVersion(v, ver, vername, local);
+    versymbol_t * s = MatchVersion(v, ver, vername, 0, local, defver);
     if(s)
         return s->sym.offs;
     return 0;
 }
 
-void AddWeakSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr, uint32_t sz, int ver, const char* vername)
+void AddUniqueSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr, uint32_t sz, int ver, const char* vername)
 {
     int ret;
     khint_t k = kh_put(mapsymbols, mapsymbols, name, &ret);
@@ -194,7 +198,7 @@ void AddWeakSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr
     // add a new record
     if(v->sz == v->cap) {
         v->cap+=4;
-        v->syms = (versymbol_t*)realloc(v->syms, v->cap*sizeof(versymbol_t));
+        v->syms = (versymbol_t*)box_realloc(v->syms, v->cap*sizeof(versymbol_t));
     }
     int idx = v->sz++;
     v->syms[idx].version = ver;
@@ -203,7 +207,7 @@ void AddWeakSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr
     v->syms[idx].sym.sz = sz;
 }
 
-int GetSymbolStartEnd(kh_mapsymbols_t* mapsymbols, const char* name, uintptr_t* start, uintptr_t* end, int ver, const char* vername, int local)
+int GetSymbolStartEnd(kh_mapsymbols_t* mapsymbols, const char* name, uintptr_t* start, uintptr_t* end, int ver, const char* vername, int local, const char* defver)
 {
     if(!mapsymbols)
         return 0;
@@ -211,7 +215,24 @@ int GetSymbolStartEnd(kh_mapsymbols_t* mapsymbols, const char* name, uintptr_t* 
     if(k==kh_end(mapsymbols))
         return 0;
     versymbols_t * v = &kh_val(mapsymbols, k);
-    versymbol_t* s = MatchVersion(v, ver, vername, local);
+    versymbol_t* s = MatchVersion(v, ver, vername, 0, local, defver);
+    if(s) {
+        *start = s->sym.offs;
+        *end = *start + s->sym.sz;
+        return 1;
+    }
+    return 0;
+}
+
+int GetSizedSymbolStartEnd(kh_mapsymbols_t* mapsymbols, const char* name, uintptr_t* start, uintptr_t* end, size_t size, int ver, const char* vername, int local, const char* defver)
+{
+    if(!mapsymbols)
+        return 0;
+    khint_t k = kh_get(mapsymbols, mapsymbols, name);
+    if(k==kh_end(mapsymbols))
+        return 0;
+    versymbols_t * v = &kh_val(mapsymbols, k);
+    versymbol_t* s = MatchVersion(v, ver, vername, size, local, defver);
     if(s) {
         *start = s->sym.offs;
         *end = *start + s->sym.sz;
@@ -250,7 +271,7 @@ void FreeDefaultVersion(kh_defaultversion_t** def)
     if(!def || !*def)
         return;
     const char* v;
-    kh_foreach_value(*def, v, free((char*)v););
+    kh_foreach_value(*def, v, box_free((char*)v););
 
     kh_destroy(defaultversion, *def);
     *def = NULL;
@@ -261,7 +282,7 @@ void AddDefaultVersion(kh_defaultversion_t* def, const char* symname, const char
     int ret;
     khint_t k = kh_put(defaultversion, def, symname, &ret);
     if(!ret) return;    // already set!
-    kh_value(def, k) = strdup(vername);
+    kh_value(def, k) = box_strdup(vername);
 }
 const char* GetDefaultVersion(kh_defaultversion_t* def, const char* symname)
 {

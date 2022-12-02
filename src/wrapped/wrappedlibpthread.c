@@ -54,7 +54,7 @@ EXPORT int my_pthread_setname_np(x86emu_t* emu, void* t, void* n)
     if(need_load) {
         library_t* lib = GetLibInternal(libpthreadName);
         if(!lib) return 0;
-        f = dlsym(lib->priv.w.lib, "pthread_setname_np");
+        f = dlsym(lib->w.lib, "pthread_setname_np");
         need_load = 0;
     }
     if(f)
@@ -68,7 +68,7 @@ EXPORT int my_pthread_getname_np(x86emu_t* emu, void* t, void* n, uint32_t s)
     if(need_load) {
         library_t* lib = GetLibInternal(libpthreadName);
         if(!lib) return 0;
-        f = dlsym(lib->priv.w.lib, "pthread_getname_np");
+        f = dlsym(lib->w.lib, "pthread_getname_np");
         need_load = 0;
     }
     if(f)
@@ -111,7 +111,7 @@ EXPORT int32_t my_pthread_atfork(x86emu_t *emu, void* prepare, void* parent, voi
     // this is partly incorrect, because the emulated functions should be executed by actual fork and not by my_atfork...
     if(my_context->atfork_sz==my_context->atfork_cap) {
         my_context->atfork_cap += 4;
-        my_context->atforks = (atfork_fnc_t*)realloc(my_context->atforks, my_context->atfork_cap*sizeof(atfork_fnc_t));
+        my_context->atforks = (atfork_fnc_t*)box_realloc(my_context->atforks, my_context->atfork_cap*sizeof(atfork_fnc_t));
     }
     int i = my_context->atfork_sz++;
     my_context->atforks[i].prepare = (uintptr_t)prepare;
@@ -130,7 +130,7 @@ EXPORT void my___pthread_initialize()
 
 #define PRE_INIT\
     if(1)                                                           \
-        lib->priv.w.lib = dlopen(NULL, RTLD_LAZY | RTLD_GLOBAL);    \
+        lib->w.lib = dlopen(NULL, RTLD_LAZY | RTLD_GLOBAL);    \
     else
 
 #include "wrappedlib_init.h"

@@ -41,15 +41,16 @@
 #include "library.h"
 #include "auxval.h"
 #include "wine_tools.h"
+#include "rcfile.h"
 
 box86context_t *my_context = NULL;
 int box86_log = LOG_NONE;
 int box86_dump = 0;
 int box86_nobanner = 0;
 int box86_dynarec_log = LOG_NONE;
-int box86_pagesize;
+uintptr_t box86_pagesize;
 uintptr_t box86_load_addr = 0;
-int box86_backtrace = 0;
+int box86_showbt = 0;
 #ifdef DYNAREC
 int box86_dynarec = 1;
 int box86_dynarec_dump = 0;
@@ -59,6 +60,9 @@ int box86_dynarec_bigblock = 1;
 int box86_dynarec_strongmem = 0;
 int box86_dynarec_x87double = 0;
 int box86_dynarec_fastnan = 1;
+int box86_dynarec_safeflags = 1;
+int box86_dynarec_hotpage = 16;
+int box86_dynarec_bleeding_edge = 1;
 uintptr_t box86_nodynarec_start = 0;
 uintptr_t box86_nodynarec_end = 0;
 #ifdef ARM
@@ -74,6 +78,8 @@ int dlsym_error = 0;
 int cycle_log = 0;
 int trace_xmm = 0;
 int trace_emm = 0;
+char* trace_init = NULL;
+char* box86_trace = NULL;
 #ifdef HAVE_TRACE
 uint64_t start_cnt = 0;
 #ifdef DYNAREC
@@ -86,10 +92,11 @@ int x11color16 = 0;
 #if defined(RPI) || defined(RK3399) || defined(RK3288) || defined(GOA_CLONE) || defined(PYRA) || defined(PANDORA)
 int box86_tokitori2 = 0;
 #endif
+int box86_sc3u = 0;
 int box86_mapclean = 0;
 int box86_zoom = 0;
-int x11threads = 0;
-int x11glx = 1;
+int box86_x11threads = 0;
+int box86_x11glx = 1;
 int allow_missing_libs = 0;
 int allow_missing_symbols = 0;
 int fix_64bit_inodes = 0;
@@ -101,7 +108,7 @@ int box86_nopulse = 0;
 int box86_nogtk = 0;
 int box86_novulkan = 0;
 int box86_showsegv = 0;
-char* libGL = NULL;
+char* box86_libGL = NULL;
 uintptr_t   trace_start = 0, trace_end = 0;
 char* trace_func = NULL;
 uint32_t default_fs = 0;
@@ -111,11 +118,11 @@ int box86_tcmalloc_minimal = 0;
 FILE* ftrace = NULL;
 int ftrace_has_pid = 0;
 
-void openFTrace()
+void openFTrace(const char* newtrace)
 {
-    char* t = getenv("BOX86_TRACE_FILE");
+    const char* t = newtrace?newtrace:getenv("BOX86_TRACE_FILE");
     char tmp[500];
-    char* p = t;
+    const char* p = t;
     if(p && strstr(t, "%pid")) {
         int next = 0;
         do {
@@ -156,11 +163,12 @@ void my_child_fork()
     if(ftrace_has_pid) {
         // open a new ftrace...
         fclose(ftrace);
-        openFTrace();
+        openFTrace(NULL);
     }
 }
 
 #ifdef DYNAREC
+int getNCpu();
 void GatherDynarecExtensions()
 {
     if(box86_dynarec==0)    // no need to check if no dynarec
@@ -219,7 +227,9 @@ void GatherDynarecExtensions()
     if(arm_div)
         printf_log(LOG_INFO, " IDIVA");
 
-    printf_log(LOG_INFO, " PageSize:%d\n", box86_pagesize);
+    printf_log(LOG_INFO, " PageSize:%zd", box86_pagesize);
+    int ncpu = getNCpu();
+    printf_log(LOG_INFO, " Cores:%d\n", ncpu);
 #endif
 }
 #endif
@@ -237,7 +247,7 @@ void LoadLogEnv()
         }
     }
     // grab BOX86_TRACE_FILE envvar, and change %pid to actual pid is present in the name
-    openFTrace();
+    openFTrace(NULL);
     //box86_log = isatty(fileno(ftrace))?LOG_INFO:LOG_NONE; //default LOG value different if stdout is redirected or not
     p = getenv("BOX86_LOG");
     if(p) {
@@ -266,17 +276,20 @@ void LoadLogEnv()
     }
     p = getenv("BOX86_ROLLING_LOG");
     if(p) {
-        if(strlen(p)==1) {
-            if(p[0]>='0' && p[0]<='1')
-                cycle_log = p[0]-'0';
-        }
+        int cycle = 0;
+        if(sscanf(p, "%d", &cycle)==1)
+                cycle_log = cycle;
+        if(cycle_log==1)
+            cycle_log = 16;
+        if(cycle_log<0)
+            cycle_log = 0;
         if(cycle_log && box86_log>LOG_INFO) {
             cycle_log = 0;
             printf_log(LOG_NONE, "Incompatible Rolling log and Debug Log, disabling Rolling log\n");
         }
     }
     if(!box86_nobanner && cycle_log)
-        printf_log(LOG_INFO, "Rolling log, showing last %d function call on signals\n", CYCLE_LOG);
+        printf_log(LOG_INFO, "Rolling log, showing last %d function call on signals\n", cycle_log);
     p = getenv("BOX86_DUMP");
     if(p) {
         if(strlen(p)==1) {
@@ -367,6 +380,38 @@ void LoadLogEnv()
         if(!box86_dynarec_fastnan)
             printf_log(LOG_INFO, "Dynarec will try to normalize generated NAN\n");
     }
+    p = getenv("BOX86_DYNAREC_SAFEFLAGS");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='2')
+                box86_dynarec_safeflags = p[0]-'0';
+        }
+        if(!box86_dynarec_safeflags)
+            printf_log(LOG_INFO, "Dynarec will not play it safe with x86 flags\n");
+        else
+            printf_log(LOG_INFO, "Dynarec will play %s safe with x86 flags\n", (box86_dynarec_safeflags==1)?"moderatly":"it");
+    }
+    p = getenv("BOX86_DYNAREC_HOTPAGE");
+    if(p) {
+        int val = -1;
+        if(sscanf("%d", p, &val)==1) {
+            if(val>=0)
+                box86_dynarec_hotpage = val;
+        }
+        if(!box86_dynarec_hotpage)
+            printf_log(LOG_INFO, "Dynarec will have HotPage tagged for %d attempts\n", box86_dynarec_hotpage);
+        else
+            printf_log(LOG_INFO, "Dynarec will not tag HotPage\n");
+    }
+    p = getenv("BOX86_DYNAREC_BLEEDING_EDGE");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_bleeding_edge = p[0]-'0';
+        }
+        if(!box86_dynarec_bleeding_edge)
+            printf_log(LOG_INFO, "Dynarec will not detect MonoBleedingEdge\n");
+    }
     p = getenv("BOX86_NODYNAREC");
     if(p) {
         if (strchr(p,'-')) {
@@ -442,31 +487,31 @@ void LoadLogEnv()
     if(p) {
         if(strlen(p)==1) {
             if(p[0]>='0' && p[0]<='0'+1)
-                x11threads = p[0]-'0';
+                box86_x11threads = p[0]-'0';
         }
-        if(x11threads)
+        if(box86_x11threads)
             printf_log(LOG_INFO, "Try to Call XInitThreads if libX11 is loaded\n");
     }
     p = getenv("BOX86_X11GLX");
     if(p) {
         if(strlen(p)==1) {
             if(p[0]>='0' && p[0]<='0'+1)
-                x11glx = p[0]-'0';
+                box86_x11glx = p[0]-'0';
         }
-        if(x11glx)
+        if(box86_x11glx)
             printf_log(LOG_INFO, "Hack to force libX11 GLX extension present\n");
         else
             printf_log(LOG_INFO, "Disabled Hack to force libX11 GLX extension present\n");
     }
     p = getenv("BOX86_LIBGL");
     if(p)
-        libGL = strdup(p);
-    if(!libGL) {
+        box86_libGL = box_strdup(p);
+    if(!box86_libGL) {
         p = getenv("SDL_VIDEO_GL_DRIVER");
         if(p)
-            libGL = strdup(p);
+            box86_libGL = box_strdup(p);
     }
-    if(libGL) {
+    if(box86_libGL) {
         printf_log(LOG_INFO, "BOX86 using \"%s\" as libGL.so.1\n", p);
     }
     p = getenv("BOX86_ALLOWMISSING_LIBS");
@@ -543,13 +588,13 @@ void LoadLogEnv()
         if(box86_showsegv)
             printf_log(LOG_INFO, "Show Segfault signal even if a signal handler is present\n");
     }
-    p = getenv("BOX86_BACKTRACE");
+    p = getenv("BOX86_SHOWBT");
         if(p) {
         if(strlen(p)==1) {
             if(p[0]>='0' && p[0]<='0'+1)
-                box86_backtrace = p[0]-'0';
+                box86_showbt = p[0]-'0';
         }
-        if(box86_backtrace)
+        if(box86_showbt)
             printf_log(LOG_INFO, "Show Backtrace for signals\n");
     }
     box86_pagesize = sysconf(_SC_PAGESIZE);
@@ -606,19 +651,19 @@ int GatherEnv(char*** dest, char** env, const char* prog)
     char* ld_path = NULL;
     while(*p) {
         if(strncmp(*p, "BOX86_PATH=", 11)==0) {
-            (*dest)[idx++] = strdup(*p);
+            (*dest)[idx++] = box_strdup(*p);
             box86_path = 1;
         } else if(strncmp(*p, "BOX86_LD_LIBRARY_PATH=", 22)==0) {
-            (*dest)[idx++] = strdup(*p);
+            (*dest)[idx++] = box_strdup(*p);
             box86_ld_path = 1;
         } else if(strncmp(*p, "_=", 2)==0) {
             /*int l = strlen(prog);
             char tmp[l+3];
             strcpy(tmp, "_=");
             strcat(tmp, prog);
-            (*dest)[idx++] = strdup(tmp);*/
+            (*dest)[idx++] = box_strdup(tmp);*/
         } else if(strncmp(*p, "BOX86_", 6)!=0) {
-            (*dest)[idx++] = strdup(*p);
+            (*dest)[idx++] = box_strdup(*p);
             /*if(!(strncmp(*p, "PATH=", 5)==0 || strncmp(*p, "LD_LIBRARY_PATH=", 16)==0)) {
             }*/
         }
@@ -626,10 +671,10 @@ int GatherEnv(char*** dest, char** env, const char* prog)
     }
     // update the calloc of envv when adding new variables here
     if(!box86_path) {
-        (*dest)[idx++] = strdup("BOX86_PATH=.:bin");
+        (*dest)[idx++] = box_strdup("BOX86_PATH=.:bin");
     }
     if(!box86_ld_path) {
-        (*dest)[idx++] = strdup("BOX86_LD_LIBRARY_PATH=.:lib");
+        (*dest)[idx++] = box_strdup("BOX86_LD_LIBRARY_PATH=.:lib");
     }
     // add "_=prog" at the end...
     if(prog) {
@@ -637,7 +682,7 @@ int GatherEnv(char*** dest, char** env, const char* prog)
         char tmp[l+3];
         strcpy(tmp, "_=");
         strcat(tmp, prog);
-        (*dest)[idx++] = strdup(tmp);
+        (*dest)[idx++] = box_strdup(tmp);
     }
     // and a final NULL
     (*dest)[idx++] = 0;
@@ -656,15 +701,18 @@ void PrintHelp() {
     printf(" BOX86_PATH is the box86 version of PATH (default is '.:bin')\n");
     printf(" BOX86_LD_LIBRARY_PATH is the box86 version LD_LIBRARY_PATH (default is '.:lib')\n");
     printf(" BOX86_LOG with 0/1/2/3 or NONE/INFO/DEBUG/DUMP to set the printed debug info (level 3 is level 2 + BOX86_DUMP)\n");
+    printf(" BOX86_ROLLING_LOG 0/1 use a rolling level 2 log of 16 entries\n");
     printf(" BOX86_DUMP with 0/1 to dump elf infos\n");
     printf(" BOX86_NOBANNER with 0/1 to enable/disable the printing of box86 version and build at start\n");
 #ifdef DYNAREC
     printf(" BOX86_DYNAREC_LOG with 0/1/2/3 or NONE/INFO/DEBUG/DUMP to set the printed dynarec info\n");
     printf(" BOX86_DYNAREC with 0/1 to disable or enable Dynarec (On by default)\n");
     printf(" BOX86_NODYNAREC with address interval (0x1234-0x4567) to forbid dynablock creation in the interval specified\n");
-    printf(" BOX86_DYNAREC_BIGBLOCK 0/1/2 to control Dynarec building BigBlock or not\n");
-    printf(" BOX86_DYNAREC_STRONGMEM 0/1/2 to control Dynarec emulation attempt of Stong memory model\n");
-    printf(" BOX86_DYNAREC_X87DOUBLE 0/1 to force Dynarec to use Double for x87 emulation\n");
+    printf(" BOX86_DYNAREC_BIGBLOCK 0/1/2 to control Dynarec building BigBlock or not (default: 1)\n");
+    printf(" BOX86_DYNAREC_STRONGMEM 0/1/2 to control Dynarec emulation attempt of Stong memory model (default: 0)\n");
+    printf(" BOX86_DYNAREC_X87DOUBLE 0/1 to force Dynarec to use Double for x87 emulation (default: 0)\n");
+    printf(" BOX86_DYNAREC_FASTNAN 0/1 to control if NaN are x86 accurate or not (default: 1)\n");
+    printf(" BOX86_DYNAREC_SAFEFLAGS 0/1/2 to control flags generation on RET/CALL opcodes (default: 1)\n");
 #endif
 #ifdef HAVE_TRACE
     printf(" BOX86_TRACE with 1 to enable x86 execution trace\n");
@@ -704,17 +752,17 @@ void addNewEnvVar(const char* s)
 {
     if(!s)
         return;
-    char* p = strdup(s);
+    char* p = box_strdup(s);
     char* e = strchr(p, '=');
     if(!e) {
         printf_log(LOG_INFO, "Invalid speicifc env. var. '%s'\n", s);
-        free(p);
+        box_free(p);
         return;
     }
     *e='\0';
     ++e;
     setenv(p, e, 1);
-    free(p);
+    box_free(p);
 }
 
 EXPORTDYN
@@ -808,13 +856,17 @@ void LoadEnvVars(box86context_t *context)
 #ifdef HAVE_TRACE
     char* p = getenv("BOX86_TRACE");
     if(p) {
-        if (strcmp(p, "0"))
+        if (strcmp(p, "0")) {
             context->x86trace = 1;
+            box86_trace = p;
+        }
     }
     p = getenv("BOX86_TRACE_INIT");
     if(p) {
-        if (strcmp(p, "0"))
+        if (strcmp(p, "0")) {
             context->x86trace = 1;
+            trace_init = p;
+        }
     }
     if(my_context->x86trace) {
         printf_log(LOG_INFO, "Initializing Zydis lib\n");
@@ -826,8 +878,8 @@ void LoadEnvVars(box86context_t *context)
 #endif
 #ifdef BUILD_LIB
     context->argc = 1;  // need 1
-    context->argv = (char**)malloc(sizeof(char*));
-    context->argv[0] = strdup("dummy");
+    context->argv = (char**)box_malloc(sizeof(char*));
+    context->argv[0] = box_strdup("dummy");
 #endif
 }
 
@@ -835,7 +887,7 @@ EXPORTDYN
 void setupTraceInit(box86context_t* context)
 {
 #ifdef HAVE_TRACE
-    char* p = getenv("BOX86_TRACE_INIT");
+    char* p = trace_init;
     if(p) {
         setbuf(stdout, NULL);
         uintptr_t trace_start=0, trace_end=0;
@@ -849,7 +901,7 @@ void setupTraceInit(box86context_t* context)
             if(trace_start || trace_end)
                 SetTraceEmu(trace_start, trace_end);
         } else {
-            if (GetSymbolStartEnd(GetMapSymbol(my_context->maplib), p, &trace_start, &trace_end, -1, NULL, -1)) {
+            if (GetGlobalSymbolStartEnd(my_context->maplib, p, &trace_start, &trace_end, NULL, -1, NULL)) {
                 SetTraceEmu(trace_start, trace_end);
                 printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)trace_start, (void*)trace_end);
             } else {
@@ -858,7 +910,7 @@ void setupTraceInit(box86context_t* context)
             }
         }
     } else {
-        p = getenv("BOX86_TRACE");
+        p = box86_trace;
         if(p)
             if (strcmp(p, "0"))
                 SetTraceEmu(0, 1);
@@ -870,7 +922,7 @@ EXPORTDYN
 void setupTrace(box86context_t* context)
 {
 #ifdef HAVE_TRACE
-    char* p = getenv("BOX86_TRACE");
+    char* p = box86_trace;
     if(p) {
         setbuf(stdout, NULL);
         uintptr_t trace_start=0, trace_end=0;
@@ -899,7 +951,9 @@ void setupTrace(box86context_t* context)
             } else {
                 printf_log(LOG_NONE, "Warning, symbol to Traced (\"%s\") not found, trying to set trace later\n", p);
                 SetTraceEmu(0, 1);  // disabling trace, mostly
-                trace_func = strdup(p);
+                if(trace_func)
+                    box_free(trace_func);
+                trace_func = box_strdup(p);
             }
         }
     }
@@ -959,9 +1013,27 @@ void endBox86()
     }
     // all done, free context
     FreeBox86Context(&my_context);
-    if(libGL) {
-        free(libGL);
-        libGL = NULL;
+    if(box86_libGL) {
+        box_free(box86_libGL);
+        box86_libGL = NULL;
+    }
+}
+
+static void load_rcfiles()
+{
+    if(FileExist("/etc/box86.box86rc", IS_FILE))
+        LoadRCFile("/etc/box86.box86rc");
+    #ifdef PANDORA
+    if(FileExist("/mnt/utmp/codeblocks/usr/etc/box86.box86rc", IS_FILE))
+        LoadRCFile("/mnt/utmp/codeblocks/usr/etc/box86.box86rc");
+    #endif
+    char* p = getenv("HOME");
+    if(p) {
+        char tmp[4096];
+        strncpy(tmp, p, 4096);
+        strncat(tmp, "/.box86rc", 4095);
+        if(FileExist(tmp, IS_FILE))
+            LoadRCFile(tmp);
     }
 }
 
@@ -1007,13 +1079,14 @@ void init_library()
 static void free_contextargv()
 {
     for(int i=0; i<my_context->argc; ++i)
-        free(my_context->argv[i]);
+        box_free(my_context->argv[i]);
 }
 
 extern char **environ;
 
-int main(int argc, const char **argv, char **env) {
-
+int main(int argc, const char **argv, char **env)
+{
+    init_malloc_hook();
     init_auxval(argc, argv, environ?environ:env);
     // trying to open and load 1st arg
     if(argc==1) {
@@ -1037,6 +1110,9 @@ int main(int argc, const char **argv, char **env) {
 
     // check BOX86_LOG debug level
     LoadLogEnv();
+    if(!getenv("BOX64_NORCFILES")) {
+        load_rcfiles();
+    }
     char* bashpath = NULL;
     {
         char* p = getenv("BOX86_BASH");
@@ -1128,12 +1204,16 @@ int main(int argc, const char **argv, char **env) {
     {
         my_context->box64path = getenv("BOX86_BOX64");
         if(!my_context->box64path) {
-            my_context->box64path = strdup(my_context->box86path);
+            my_context->box64path = box_strdup(my_context->box86path);
             char* p = strrchr(my_context->box64path, '8');  // get the 8 of box86
             p[0] = '6'; p[1] = '4'; // change 86 to 64
         }
         if(!FileExist(my_context->box64path, IS_FILE)) {
-            free(my_context->box64path);
+            box_free(my_context->box64path);
+            my_context->box64path = ResolveFile("box64", &my_context->box86_path);
+        }
+        if(!FileExist(my_context->box64path, IS_FILE)) {
+            box_free(my_context->box64path);
             my_context->box64path = NULL;
             if(bashpath && FileIsX64ELF(bashpath)) {
                 printf_log(LOG_INFO, "The bash binary given is an x86_64 version, but box64 is not found\n");
@@ -1146,7 +1226,7 @@ int main(int argc, const char **argv, char **env) {
     my_context->envc = CountEnv(environ?environ:env);
     printf_log(LOG_INFO, "Counted %d Env var\n", my_context->envc);
     // allocate extra space for new environment variables such as BOX86_PATH
-    my_context->envv = (char**)calloc(my_context->envc+4, sizeof(char*));
+    my_context->envv = (char**)box_calloc(my_context->envc+4, sizeof(char*));
     GatherEnv(&my_context->envv, environ?environ:env, my_context->box86path);
     if(box86_dump) {
         for (int i=0; i<my_context->envc; ++i)
@@ -1188,7 +1268,7 @@ int main(int argc, const char **argv, char **env) {
     // lets build argc/argv stuff
     printf_log(LOG_INFO, "Looking for %s\n", prog);
     if(strchr(prog, '/'))
-        my_context->argv[0] = strdup(prog);
+        my_context->argv[0] = box_strdup(prog);
     else
         my_context->argv[0] = ResolveFile(prog, &my_context->box86_path);
 
@@ -1200,43 +1280,21 @@ int main(int argc, const char **argv, char **env) {
     if(box86_wine) {
         AddPath("libdl.so.2", &ld_preload, 0);
     }
-    // special case for LittleInferno that use an old libvorbis
-    if(strstr(prgname, "LittleInferno.bin.x86")==prgname) {
-        printf_log(LOG_INFO, "LittleInferno detected, forcing emulated libvorbis\n");
-        AddPath("libvorbis.so.0", &my_context->box86_emulated_libs, 0);
-    }
-    // special case for dontstarve that use an old SDL2
-    if(strstr(prgname, "dontstarve")) {
-        printf_log(LOG_INFO, "Dontstarve* detected, forcing emulated SDL2\n");
-        AddPath("libSDL2-2.0.so.0", &my_context->box86_emulated_libs, 0);
-    }
     // special case for steam that somehow seems to alter libudev opaque pointer (udev_monitor)
     if(strstr(prgname, "steam")==prgname) {
-        printf_log(LOG_INFO, "steam detected, forcing emulated libudev and gtk\n");
-        AddPath("libudev.so.0", &my_context->box86_emulated_libs, 0);
+        printf_log(LOG_INFO, "steam detected\n");
         box86_steam = 1;
-        box86_nogtk = 1;
-        AddPath("libSDL2-2.0.so.0", &my_context->box86_emulated_libs, 0);
         unsetenv("BOX86_NOGTK");
-        #ifdef PANDORA
-        x11color16 = 1;
-        #endif
     }
     // special case for steam-runtime-check-requirements to fake 64bits suport
     if(strstr(prgname, "steam-runtime-check-requirements")==prgname) {
         printf_log(LOG_INFO, "steam-runtime-check-requirements detected, faking All is good!\n");
         exit(0);    // exiting, not testing anything
     }
-    // special case for streaming_client to use emulated libSDL2
-    if(strstr(prgname, "streaming_client")==prgname) {
-        printf_log(LOG_INFO, "streaming_client detected, using emulated libSDL2!\n");
-        AddPath("libSDL2-2.0.so.0", &my_context->box86_emulated_libs, 0);
-        AddPath("libSDL2_ttf-2.0.so.0", &my_context->box86_emulated_libs, 0);
-    }
     // special case for UnrealLinux.bin, it doesn't like "full path resolution"
     if(!strcmp(prog, "UnrealLinux.bin") && my_context->argv[0]) {
-        free(my_context->argv[0]);
-        my_context->argv[0] = strdup("./UnrealLinux.bin");
+        box_free(my_context->argv[0]);
+        my_context->argv[0] = box_strdup("./UnrealLinux.bin");
     }
     #if defined(RPI) || defined(RK3399) || defined(RK3288) || defined(GOA_CLONE) || defined(PYRA) || defined(PANDORA)
     // special case for TokiTori 2+, that check if texture max size is > = 8192
@@ -1245,15 +1303,19 @@ int main(int argc, const char **argv, char **env) {
         box86_tokitori2 = 1;
     }
     #endif
+    // special case for SimCity3k Demo, that have a bug were it do feof after fclose on the same fd
+    if(strstr(prgname, "sc3u_demo.x86")==prgname) {
+        printf_log(LOG_INFO, "SimCity3000 Demo detected, runtime patch to fix buf feof after fclose\n");
+        box86_sc3u = 1;
+    }
+    if(strstr(prgname, "sc3u")==prgname) {
+        printf_log(LOG_INFO, "SimCity3000 detected, runtime patch to fix buf feof after fclose\n");
+        box86_sc3u = 1;
+    }
     // special case for zoom
     if(strstr(prgname, "zoom")==prgname) {
         printf_log(LOG_INFO, "Zoom detected, trying to use system libturbojpeg if possible\n");
         box86_zoom = 1;
-    }
-    // special case for X3Reunion to use emulated libjpeg62
-    if(strstr(prgname, "X3R_main")) {
-        printf_log(LOG_INFO, "X3Reunion detected, forcing emulated libjpeg\n");
-        AddPath("libjpeg.so.62", &my_context->box86_emulated_libs, 0);
     }
     // special case for bash (add BOX86_NOBANNER=1 if not there)
     if(!strcmp(prgname, "bash")) {
@@ -1268,7 +1330,7 @@ int main(int argc, const char **argv, char **env) {
         }
     }
     if(bashpath)
-        my_context->bashpath = strdup(bashpath);
+        my_context->bashpath = box_strdup(bashpath);
 
     /*if(strstr(prgname, "awesomium_process")==prgname) {
         printf_log(LOG_INFO, "awesomium_process detected, forcing emulated libpng12\n");
@@ -1277,9 +1339,11 @@ int main(int argc, const char **argv, char **env) {
     /*if(!strcmp(prgname, "gdb")) {
         exit(-1);
     }*/
+    ApplyParams("*");   // [*] is a special setting for all process
+    ApplyParams(prgname);
 
     for(int i=1; i<my_context->argc; ++i) {
-        my_context->argv[i] = strdup(argv[i+nextarg]);
+        my_context->argv[i] = box_strdup(argv[i+nextarg]);
         printf_log(LOG_INFO, "argv[%i]=\"%s\"\n", i, my_context->argv[i]);
     }
 
@@ -1298,27 +1362,29 @@ int main(int argc, const char **argv, char **env) {
         FreeCollection(&ld_preload);
         return -1;
     }
-    if(!(my_context->fullpath = realpath(my_context->argv[0], NULL)))
-        my_context->fullpath = strdup(my_context->argv[0]);
-    FILE *f = fopen64(my_context->argv[0], "rb");
+    if(!(my_context->fullpath = box_realpath(my_context->argv[0], NULL)))
+        my_context->fullpath = box_strdup(my_context->argv[0]);
+    if(getenv("BOX86_ARG0"))
+        my_context->argv[0] = box_strdup(getenv("BOX86_ARG0"));
+    FILE *f = fopen64(my_context->fullpath, "rb");
     if(!f) {
-        printf_log(LOG_NONE, "Error: Cannot open %s\n", my_context->argv[0]);
+        printf_log(LOG_NONE, "Error: Cannot open %s\n", my_context->fullpath);
         free_contextargv();
         FreeBox86Context(&my_context);
         FreeCollection(&ld_preload);
         return -1;
     }
-    elfheader_t *elf_header = LoadAndCheckElfHeader(f, my_context->argv[0], 1);
+    elfheader_t *elf_header = LoadAndCheckElfHeader(f, my_context->fullpath, 1);
     if(!elf_header) {
-        int x64 = my_context->box64path?FileIsX64ELF(my_context->argv[0]):0;
-        int script = my_context->bashpath?FileIsShell(my_context->argv[0]):0;
-        printf_log(LOG_NONE, "Error: reading elf header of %s, try to launch %s instead\n", my_context->argv[0], x64?"using box64":(script?"using bash":"natively"));
+        int x64 = my_context->box64path?FileIsX64ELF(my_context->fullpath):0;
+        int script = my_context->bashpath?FileIsShell(my_context->fullpath):0;
+        printf_log(LOG_NONE, "Error: reading elf header of %s, try to launch %s instead\n", my_context->fullpath, x64?"using box64":(script?"using bash":"natively"));
         fclose(f);
         FreeCollection(&ld_preload);
         int ret;
         if(x64) {
            // duplicate the array and insert 1st arg as box86
-            const char** newargv = (const char**)calloc(my_context->argc+2, sizeof(char*));
+            const char** newargv = (const char**)box_calloc(my_context->argc+2, sizeof(char*));
             newargv[0] = my_context->box64path;
             for(int i=0; i<my_context->argc; ++i)
                 newargv[i+1] = my_context->argv[i];
@@ -1326,14 +1392,14 @@ int main(int argc, const char **argv, char **env) {
             ret = execvp(newargv[0], (char * const*)newargv);
         } else if (script) {
             // duplicate the array and insert 1st arg as box64, 2nd is bash
-            const char** newargv = (const char**)calloc(my_context->argc+3, sizeof(char*));
+            const char** newargv = (const char**)box_calloc(my_context->argc+3, sizeof(char*));
             newargv[0] = my_context->box86path;
             newargv[1] = my_context->bashpath;
             for(int i=0; i<my_context->argc; ++i)
                 newargv[i+2] = my_context->argv[i];
             ret = execvp(newargv[0], (char * const*)newargv);
         } else {
-            const char** newargv = (const char**)calloc(my_context->argc+1, sizeof(char*));
+            const char** newargv = (const char**)box_calloc(my_context->argc+1, sizeof(char*));
             for(int i=0; i<my_context->argc; ++i)
                 newargv[i] = my_context->argv[i];
             ret = execvp(newargv[0], (char * const*)newargv);
@@ -1345,7 +1411,7 @@ int main(int argc, const char **argv, char **env) {
     AddElfHeader(my_context, elf_header);
 
     if(CalcLoadAddr(elf_header)) {
-        printf_log(LOG_NONE, "Error: reading elf header of %s\n", my_context->argv[0]);
+        printf_log(LOG_NONE, "Error: reading elf header of %s\n", my_context->fullpath);
         fclose(f);
         free_contextargv();
         FreeBox86Context(&my_context);
@@ -1354,7 +1420,7 @@ int main(int argc, const char **argv, char **env) {
     }
     // allocate memory
     if(AllocElfMemory(my_context, elf_header, 1)) {
-        printf_log(LOG_NONE, "Error: allocating memory for elf %s\n", my_context->argv[0]);
+        printf_log(LOG_NONE, "Error: allocating memory for elf %s\n", my_context->fullpath);
         fclose(f);
         free_contextargv();
         FreeBox86Context(&my_context);
@@ -1363,7 +1429,7 @@ int main(int argc, const char **argv, char **env) {
     }
     // Load elf into memory
     if(LoadElfMemory(f, my_context, elf_header)) {
-        printf_log(LOG_NONE, "Error: loading in memory elf %s\n", my_context->argv[0]);
+        printf_log(LOG_NONE, "Error: loading in memory elf %s\n", my_context->fullpath);
         fclose(f);
         free_contextargv();
         FreeBox86Context(&my_context);
@@ -1372,6 +1438,7 @@ int main(int argc, const char **argv, char **env) {
     }
     // can close the file now
     fclose(f);
+    my_context->brk = ElfGetBrk(elf_header);
     if(ElfCheckIfUseTCMallocMinimal(elf_header)) {
         if(!box86_tcmalloc_minimal) {
             // need to reload with tcmalloc_minimal as a LD_PRELOAD!
@@ -1381,10 +1448,10 @@ int main(int argc, const char **argv, char **env) {
             int nenv = 0;
             while(env[nenv]) nenv++;
             // alloc + "LD_PRELOAD" if needd + last NULL ending
-            char** newenv = (char**)calloc(nenv+1+((preload)?0:1), sizeof(char*));
+            char** newenv = (char**)box_calloc(nenv+1+((preload)?0:1), sizeof(char*));
             // copy strings
             for (int i=0; i<nenv; ++i)
-                newenv[i] = strdup(env[i]);
+                newenv[i] = box_strdup(env[i]);
             // add ld_preload
             if(preload) {
                 // find the line
@@ -1393,24 +1460,24 @@ int main(int argc, const char **argv, char **env) {
                     if(strstr(newenv[l], "LD_PRELOAD=")==newenv[l]) {
                         // found it!
                         char *old = newenv[l];
-                        newenv[l] = (char*)calloc(strlen(old)+strlen("libtcmalloc_minimal.so.4:")+1, sizeof(char));
+                        newenv[l] = (char*)box_calloc(strlen(old)+strlen("libtcmalloc_minimal.so.4:")+1, sizeof(char));
                         strcpy(newenv[l], "LD_PRELOAD=libtcmalloc_minimal.so.4:");
                         strcat(newenv[l], old + strlen("LD_PRELOAD="));
-                        free(old);
+                        box_free(old);
                         // done, end loop
                         l = nenv;
                     } else ++l;
                 }
             } else {
                 //move last one
-                newenv[nenv] = strdup(newenv[nenv-1]);
-                free(newenv[nenv-1]);
-                newenv[nenv-1] = strdup("LD_PRELOAD=libtcmalloc_minimal.so.4");
+                newenv[nenv] = box_strdup(newenv[nenv-1]);
+                box_free(newenv[nenv-1]);
+                newenv[nenv-1] = box_strdup("LD_PRELOAD=libtcmalloc_minimal.so.4");
             }
             // duplicate argv too
-            char** newargv = calloc(argc+1, sizeof(char*));
+            char** newargv = box_calloc(argc+1, sizeof(char*));
             int narg = 0;
-            while(argv[narg]) {newargv[narg] = strdup(argv[narg]); narg++;}
+            while(argv[narg]) {newargv[narg] = box_strdup(argv[narg]); narg++;}
             // launch with new env...
             if(execve(newargv[0], newargv, newenv)<0)
                 printf_log(LOG_NONE, "Failed to relaunch, error is %d/%s\n", errno, strerror(errno));
@@ -1427,11 +1494,11 @@ int main(int argc, const char **argv, char **env) {
 #endif
     // change process name
     {
-        char* p = strrchr(my_context->argv[0], '/');
+        char* p = strrchr(my_context->fullpath, '/');
         if(p)
             ++p;
         else
-            p = my_context->argv[0];
+            p = my_context->fullpath;
         if(prctl(PR_SET_NAME, p)==-1)
             printf_log(LOG_NONE, "Error setting process name (%s)\n", strerror(errno));
         else
@@ -1465,6 +1532,19 @@ int main(int argc, const char **argv, char **env) {
             printf_log(LOG_NONE, "Cannot patch the game\n");
     }
     #endif
+    if(box86_sc3u) {
+        uint32_t *patch1 = (uint32_t*)0x8400684;
+        uint32_t *patch2 = (uint32_t*)0x8406644;
+        if(*patch1==0x57f4c483) {
+            *patch1=0x57f407eb;
+            printf_log(LOG_NONE, "Runtime patching the game\n");
+        } else if(*patch2==0x57f4c483) {
+            *patch2=0x57f407eb;
+            printf_log(LOG_NONE, "Runtime patching the game\n");
+        } else
+
+            printf_log(LOG_NONE, "Cannot patch the game\n");
+    }
     // init x86 emu
     x86emu_t *emu = NewX86Emu(my_context, my_context->ep, (uintptr_t)my_context->stack, my_context->stacksz, 0);
     // stack setup is much more complicated then just that!
@@ -1480,11 +1560,11 @@ int main(int argc, const char **argv, char **env) {
 
     setupTraceInit(my_context);
     // export symbols
-    AddSymbols(my_context->maplib, GetMapSymbol(my_context->maplib), GetWeakSymbol(my_context->maplib), GetLocalSymbol(my_context->maplib), elf_header);
+    AddSymbols(my_context->maplib, GetMapSymbols(elf_header), GetWeakSymbols(elf_header), GetLocalSymbols(elf_header), elf_header);
     if(wine_preloaded) {
-        uintptr_t wineinfo = FindSymbol(GetMapSymbol(my_context->maplib), "wine_main_preload_info", -1, NULL, 1);
-        if(!wineinfo) wineinfo = FindSymbol(GetWeakSymbol(my_context->maplib), "wine_main_preload_info", -1, NULL, 1);
-        if(!wineinfo) wineinfo = FindSymbol(GetLocalSymbol(my_context->maplib), "wine_main_preload_info", -1, NULL, 1);
+        uintptr_t wineinfo = FindSymbol(GetMapSymbols(elf_header), "wine_main_preload_info", -1, NULL, 1, NULL);
+        if(!wineinfo) wineinfo = FindSymbol(GetWeakSymbols(elf_header), "wine_main_preload_info", -1, NULL, 1, NULL);
+        if(!wineinfo) wineinfo = FindSymbol(GetLocalSymbols(elf_header), "wine_main_preload_info", -1, NULL, 1, NULL);
         if(!wineinfo) {printf_log(LOG_NONE, "Warning, Symbol wine_main_preload_info not found\n");}
         else {
             *(void**)wineinfo = get_wine_prereserve();
@@ -1505,14 +1585,14 @@ int main(int argc, const char **argv, char **env) {
     FreeCollection(&ld_preload);
     // Call librarian to load all dependant elf
     if(LoadNeededLibs(elf_header, my_context->maplib, &my_context->neededlibs, NULL, 0, 0, my_context, emu)) {
-        printf_log(LOG_NONE, "Error: loading needed libs in elf %s\n", my_context->argv[0]);
+        printf_log(LOG_NONE, "Error: loading needed libs in elf %s\n", my_context->fullpath);
         FreeBox86Context(&my_context);
         return -1;
     }
     // reloc...
     printf_log(LOG_DEBUG, "And now export symbols / relocation for %s...\n", ElfName(elf_header));
     if(RelocateElf(my_context->maplib, NULL, 0, elf_header)) {
-        printf_log(LOG_NONE, "Error: relocating symbols in elf %s\n", my_context->argv[0]);
+        printf_log(LOG_NONE, "Error: relocating symbols in elf %s\n", my_context->fullpath);
         FreeBox86Context(&my_context);
         return -1;
     }
@@ -1538,13 +1618,13 @@ int main(int argc, const char **argv, char **env) {
     ResetFlags(emu);
     PushExit(emu);  // push to pop it just after
     SetEDX(emu, Pop32(emu));    // EDX is exit function
-    Run(emu, 0);
+    DynaRun(emu);
     // Get EAX
     int ret = GetEAX(emu);
     printf_log(LOG_DEBUG, "Emulation finished, EAX=%d\n", ret);
 
     if(trace_func)  {
-        free(trace_func);
+        box_free(trace_func);
         trace_func = NULL;
     }
 

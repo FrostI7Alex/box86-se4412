@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
+#include <stddef.h>
 
 #include "wrappedlibs.h"
 
@@ -18,9 +19,6 @@
 
 const char* libx11Name = "libX11.so.6";
 #define LIBNAME libx11
-
-extern int x11threads;
-extern int x11glx;
 
 typedef int (*XErrorHandler)(void *, void *);
 void* my_XSetErrorHandler(x86emu_t* t, XErrorHandler handler);
@@ -86,8 +84,8 @@ typedef uintptr_t (*LFpii_t)(void*, int32_t, int32_t);
 typedef int32_t (*iFpiiL_t)(void*, int32_t, int32_t, uintptr_t);
 typedef void* (*pFpiiuu_t)(void*, int32_t, int32_t, uint32_t, uint32_t);
 
-#define ADDED_FUNCTIONS()       \
-    GO(XInitThreads, uFv_t)     \
+#define ADDED_FUNCTIONS()   \
+    GO(XInitThreads, uFv_t) \
 
 #include "generated/wrappedlibx11types.h"
 
@@ -136,12 +134,12 @@ static void* findwire_to_eventFct(void* fct)
 static void* reverse_wire_to_eventFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_wire_to_event_##A == fct) return (void*)my_wire_to_event_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFppp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFppp, fct, 0, NULL);
 }
 
 // event_to_wire
@@ -169,12 +167,12 @@ static void* findevent_to_wireFct(void* fct)
 static void* reverse_event_to_wireFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_event_to_wire_##A == fct) return (void*)my_event_to_wire_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFppp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFppp, fct, 0, NULL);
 }
 
 // error_handler
@@ -202,12 +200,12 @@ static void* finderror_handlerFct(void* fct)
 static void* reverse_error_handlerFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_error_handler_##A == fct) return (void*)my_error_handler_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFpp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFpp, fct, 0, NULL);
 }
 
 // ioerror_handler
@@ -235,12 +233,12 @@ static void* findioerror_handlerFct(void* fct)
 static void* reverse_ioerror_handlerFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_ioerror_handler_##A == fct) return (void*)my_ioerror_handler_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFp, fct, 0, NULL);
 }
 
 // exterror_handler
@@ -268,12 +266,12 @@ static void* findexterror_handlerFct(void* fct)
 static void* reverse_exterror_handlerFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_exterror_handler_##A == fct) return (void*)my_exterror_handler_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFpppp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFpppp, fct, 0, NULL);
 }
 
 // close_display
@@ -301,12 +299,12 @@ static void* findclose_displayFct(void* fct)
 static void* reverse_close_displayFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_close_display_##A == fct) return (void*)my_close_display_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFpp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFpp, fct, 0, NULL);
 }
 
 // register_im
@@ -334,12 +332,12 @@ static void* findregister_imFct(void* fct)
 static void* reverse_register_imFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_register_im_##A == fct) return (void*)my_register_im_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFppp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFppp, fct, 0, NULL);
 }
 
 // XConnectionWatchProc
@@ -434,12 +432,12 @@ static void* findXSynchronizeProcFct(void* fct)
 static void* reverse_XSynchronizeProcFct(library_t* lib, void* fct)
 {
     if(!fct) return fct;
-    if(CheckBridged(lib->priv.w.bridge, fct))
-        return (void*)CheckBridged(lib->priv.w.bridge, fct);
+    if(CheckBridged(lib->w.bridge, fct))
+        return (void*)CheckBridged(lib->w.bridge, fct);
     #define GO(A) if(my_XSynchronizeProc_##A == fct) return (void*)my_XSynchronizeProc_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(lib->priv.w.bridge, iFppp, fct, 0, NULL);
+    return (void*)AddBridge(lib->w.bridge, iFppp, fct, 0, NULL);
 }
 
 #undef SUPER
@@ -575,8 +573,8 @@ if (va[i] && strcmp((char*)va[i], A) == 0) {                                    
 EXPORT void* my_XVaCreateNestedList(x86emu_t* emu, int unused, void** va) {
     int n = 0;
     while (va[n]) n+=2;
-    void** new_va = malloc(sizeof(void*) * n);
-    XICCallback* callbacks = (XICCallback*)malloc(sizeof(XIMCallback) * n);
+    void** new_va = alloca(sizeof(void*) * n);
+    XICCallback* callbacks = (XICCallback*)alloca(sizeof(XIMCallback) * n);
 
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -586,16 +584,14 @@ EXPORT void* my_XVaCreateNestedList(x86emu_t* emu, int unused, void** va) {
 
     void* res;
     VA_CALL(my->XVaCreateNestedList, unused, new_va, n, res);
-    free(new_va);
-    free(callbacks);
     return res;
 }
 
 EXPORT void* my_XCreateIC(x86emu_t* emu, void* xim, void** va) {
     int n = 0;
     while (va[n]) n+=2;
-    void** new_va = malloc(sizeof(void*) * n);
-    XICCallback* callbacks = (XICCallback*)malloc(sizeof(XIMCallback) * n);
+    void** new_va = alloca(sizeof(void*) * n);
+    XICCallback* callbacks = (XICCallback*)alloca(sizeof(XIMCallback) * n);
 
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -605,16 +601,14 @@ EXPORT void* my_XCreateIC(x86emu_t* emu, void* xim, void** va) {
 
     void* res;
     VA_CALL(my->XCreateIC, xim, new_va, n, res);
-    free(new_va);
-    free(callbacks);
     return res;
 }
 
 EXPORT void* my_XSetICValues(x86emu_t* emu, void* xic, void** va) {
     int n = 0;
     while (va[n]) n+=2;
-    void** new_va = malloc(sizeof(void*) * n);
-    XICCallback* callbacks = (XICCallback*)malloc(sizeof(XIMCallback) * n);
+    void** new_va = alloca(sizeof(void*) * n);
+    XICCallback* callbacks = (XICCallback*)alloca(sizeof(XIMCallback) * n);
 
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -624,8 +618,6 @@ EXPORT void* my_XSetICValues(x86emu_t* emu, void* xic, void** va) {
 
     void* res; 
     VA_CALL(my->XSetICValues, xic, new_va, n, res);
-    free(new_va);
-    free(callbacks);
     return res;
 }
 #undef GO
@@ -633,8 +625,8 @@ EXPORT void* my_XSetICValues(x86emu_t* emu, void* xic, void** va) {
 EXPORT void* my_XSetIMValues(x86emu_t* emu, void* xim, void** va) {
     int n = 0;
     while (va[n]) n+=2;
-    void** new_va = malloc(sizeof(void*) * n);
-    XIMCallback* callbacks = (XIMCallback*)malloc(sizeof(XIMCallback) * n);
+    void** new_va = alloca(sizeof(void*) * n);
+    XIMCallback* callbacks = (XIMCallback*)alloca(sizeof(XIMCallback) * n);
 
     #define GO(A)                                                                       \
     if (va[i] && strcmp((char*)va[i], A) == 0) {                                        \
@@ -654,8 +646,6 @@ EXPORT void* my_XSetIMValues(x86emu_t* emu, void* xim, void** va) {
     
     void* res;
     VA_CALL(my->XSetIMValues, xim, new_va, n, res)
-    free(new_va);
-    free(callbacks);
     return res;
 }
 #undef VA_CALL
@@ -963,7 +953,7 @@ EXPORT int my_XQueryExtension(x86emu_t* emu, void* display, char* name, int* maj
 {
 
     int ret = my->XQueryExtension(display, name, major, first_event, first_error);
-    if(!ret && name && !strcmp(name, "GLX") && x11glx) {
+    if(!ret && name && !strcmp(name, "GLX") && box86_x11glx) {
         // hack to force GLX to be accepted, even if not present
         // left major and first_XXX to default...
         ret = 1;
@@ -1201,14 +1191,139 @@ EXPORT void* my_XOpenDisplay(x86emu_t* emu, void* d)
     return ret;
 }
 
+typedef struct my_XGenericEventCookie_s {
+    int type;
+    unsigned long serial;
+    int send_event;
+    void* display;
+    int extension;
+    int evtype;
+    unsigned int cookie;
+    void* data;
+} my_XGenericEventCookie_t;
+
+typedef struct my_XIButtonState_s {
+    int           mask_len;
+    unsigned char *mask;
+} my_XIButtonState_t;
+
+typedef struct my_XIValuatorState_s {
+    int           mask_len;
+    unsigned char *mask;
+    double        *values;
+} my_XIValuatorState_t;
+
+typedef struct my_XIModifierState_s {
+    int    base;
+    int    latched;
+    int    locked;
+    int    effective;
+} my_XIModifierState_t;
+
+typedef struct my_XIDeviceEvent_s {
+    int           type;
+    unsigned long serial;
+    int           send_event;
+    void*         display;
+    int           extension;
+    int           evtype;
+    unsigned long time;
+    int           deviceid;
+    int           sourceid;
+    int           detail;
+    void*         root;
+    void*         event;
+    void*         child;
+    double        root_x;
+    double        root_y;
+    double        event_x;
+    double        event_y;
+    int           flags;
+    my_XIButtonState_t    buttons;
+    my_XIValuatorState_t  valuators;
+    my_XIModifierState_t  mods;
+    my_XIModifierState_t  group;
+} my_XIDeviceEvent_t;
+
+typedef struct __attribute__((packed)) x86_XIDeviceEvent_s {
+    int           type;
+    unsigned long serial;
+    int           send_event;
+    void*         display;
+    int           extension;
+    int           evtype;
+    unsigned long time;
+    int           deviceid;
+    int           sourceid;
+    int           detail;
+    void*         root;
+    void*         event;
+    void*         child;
+    double        root_x;
+    double        root_y;
+    double        event_x;
+    double        event_y;
+    int           flags;
+    my_XIButtonState_t    buttons;
+    my_XIValuatorState_t  valuators;
+    my_XIModifierState_t  mods;
+    my_XIModifierState_t  group;
+} x86_XIDeviceEvent_t;
+
+static int xi_opcode = -2;
+static my_XGenericEventCookie_t* saved_cookie = NULL;
+static x86_XIDeviceEvent_t unaligned_xideviceevent = {0};
+static void* saved_xideviceevent = NULL;
+static void UnalignedXIDeviceEvent(void* data)
+{
+    my_XIDeviceEvent_t *cookie = (my_XIDeviceEvent_t*)data;
+    memcpy(&unaligned_xideviceevent.type, &cookie->type, offsetof(my_XIDeviceEvent_t, detail)+4); // unaligned with the doubles
+    memcpy(&unaligned_xideviceevent.root_x, &cookie->root_x, 4*sizeof(double));
+    memcpy(&unaligned_xideviceevent.buttons, &cookie->buttons, sizeof(my_XIButtonState_t));
+    memcpy(&unaligned_xideviceevent.valuators, &cookie->valuators, sizeof(my_XIValuatorState_t));
+    memcpy(&unaligned_xideviceevent.mods, &cookie->mods, sizeof(my_XIModifierState_t));
+    memcpy(&unaligned_xideviceevent.group, &cookie->group, sizeof(my_XIModifierState_t));
+}
+EXPORT int my_XGetEventData(x86emu_t* emu, void* dpy, my_XGenericEventCookie_t* cookie)
+{
+    if(xi_opcode==-2) {
+        int event, error;
+        if(!my->XQueryExtension(dpy, "XInputExtension", &xi_opcode, &event, &error)) {
+            xi_opcode = -1;
+        }
+    }
+    int ret = my->XGetEventData(dpy, cookie);
+    if(ret && xi_opcode>-1 && cookie) {
+        if(cookie->type==0x23 && cookie->extension==xi_opcode) {
+            if(saved_cookie) {
+                printf_log(LOG_INFO, "Warning, saved cookie not freed before new call to XGetEventData\n");
+                saved_cookie = cookie;
+                saved_xideviceevent = cookie->data;
+                UnalignedXIDeviceEvent(cookie->data);
+                cookie->data = &unaligned_xideviceevent;
+            }
+        }
+    }
+
+    return ret;
+}
+
+EXPORT void my_XFreeEventData(x86emu_t* emu, void* dpy, my_XGenericEventCookie_t* cookie)
+{
+    if(cookie && cookie==saved_cookie) {
+        cookie->data = saved_xideviceevent;
+        saved_xideviceevent = NULL;
+        saved_cookie = NULL;
+    }
+    my->XFreeEventData(dpy, cookie);
+}
+
 #define CUSTOM_INIT                 \
-    box86->x11lib = lib;            \
     getMy(lib);                     \
     setNeededLibs(lib, 1, "libdl.so.2"); \
-    if(x11threads) my->XInitThreads();
+    if(box86_x11threads) my->XInitThreads();
 
 #define CUSTOM_FINI \
-    freeMy(); \
-    ((box86context_t*)(lib->context))->x11lib = NULL; \
+    freeMy();
 
 #include "wrappedlib_init.h"

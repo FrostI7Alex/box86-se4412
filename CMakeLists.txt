@@ -257,6 +257,7 @@ set(ELFLOADER_SRC
     "${BOX86_ROOT}/src/box86context.c"
     "${BOX86_ROOT}/src/build_info.c"
     "${BOX86_ROOT}/src/custommem.c"
+    "${BOX86_ROOT}/src/mallochook.c"
     "${BOX86_ROOT}/src/tools/bridge.c"
     "${BOX86_ROOT}/src/tools/pathcoll.c"
     "${BOX86_ROOT}/src/tools/fileutils.c"
@@ -264,6 +265,7 @@ set(ELFLOADER_SRC
     "${BOX86_ROOT}/src/tools/box86stack.c"
     "${BOX86_ROOT}/src/tools/my_cpuid.c"
     "${BOX86_ROOT}/src/tools/gtkclass.c"
+    "${BOX86_ROOT}/src/tools/rcfile.c"
     "${BOX86_ROOT}/src/tools/wine_tools.c"
     "${BOX86_ROOT}/src/elfs/elfloader.c"
     "${BOX86_ROOT}/src/elfs/elfparser.c"
@@ -422,6 +424,7 @@ set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedpangocairo.c"
     "${BOX86_ROOT}/src/wrapped/wrappedgthread2.c"
     "${BOX86_ROOT}/src/wrapped/wrappedcairo.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedcairogobject.c"
     "${BOX86_ROOT}/src/wrapped/wrappedpango.c"
     "${BOX86_ROOT}/src/wrapped/wrappeddbusglib1.c"
     "${BOX86_ROOT}/src/wrapped/wrappedgudev1.c"
@@ -465,6 +468,7 @@ set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedcap.c"
     "${BOX86_ROOT}/src/wrapped/wrappedpcap.c"
     "${BOX86_ROOT}/src/wrapped/wrappedfaudio.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedtbbmallocproxy.c"
 )
 if(ANDROID)
     list(APPEND WRAPPEDS
@@ -658,6 +662,7 @@ if(NOT _x86 AND NOT _x86_64)
   install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.5 DESTINATION /usr/lib/i386-linux-gnu/)
   install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libgcc_s.so.1 DESTINATION /usr/lib/i386-linux-gnu/)
   install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libpng12.so.0 DESTINATION /usr/lib/i386-linux-gnu/)
+  install(FILES ${CMAKE_SOURCE_DIR}/system/box86.box86rc DESTINATION /etc/)
 endif()
 
 if(NOT TARGET uninstall)

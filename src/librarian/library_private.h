@@ -8,10 +8,11 @@
 #include "wrappedlibs.h"
 #include "box86context.h"
 
-typedef struct lib_s    lib_t;
-typedef struct bridge_s bridge_t;
-typedef struct kh_bridgemap_s kh_bridgemap_t;
-typedef struct kh_mapsymbols_s kh_mapsymbols_t;
+typedef struct lib_s            lib_t;
+typedef struct bridge_s         bridge_t;
+typedef struct elfheader_s      elfheader_t;
+typedef struct kh_bridgemap_s   kh_bridgemap_t;
+typedef struct kh_mapsymbols_s  kh_mapsymbols_t;
 
 typedef struct x86emu_s x86emu_t;
 typedef void (*wrapper_t)(x86emu_t* emu, uintptr_t fnc);
@@ -35,19 +36,27 @@ typedef struct wlib_s {
     bridge_t        *bridge;
     void*           lib;        // dlopen result
     void*           priv;       // actual private
-    void*           box86lib;   // ref to the dlopen on box86 itself from context
     char*           altprefix;  // if function names are mangled..
     int             needed;
     char**          neededlibs;
+    kh_symbolmap_t  *symbolmap;
+    kh_symbolmap_t  *wsymbolmap;
+    kh_symbolmap_t  *mysymbolmap;
+    kh_symbolmap_t  *wmysymbolmap;
+    kh_symbolmap_t  *stsymbolmap;
+    kh_symbolmap_t  *wstsymbolmap;
+    kh_symbol2map_t *symbol2map;
+    kh_datamap_t    *datamap;
+    kh_datamap_t    *wdatamap;
+    kh_datamap_t    *mydatamap;
+    char            *altmy;      // to avoid duplicate symbol, like with SDL1/SDL2
 } wlib_t;
 
-typedef struct nlib_s {
+typedef struct elib_s {
     int             elf_index;
     int             finalized;
-    kh_mapsymbols_t *mapsymbols;
-    kh_mapsymbols_t *weaksymbols;
-    kh_mapsymbols_t *localsymbols;
-} nlib_t;
+    elfheader_t     *elf;
+} elib_t;
 
 typedef struct library_s {
     char*               name;   // <> path
@@ -56,29 +65,20 @@ typedef struct library_s {
     int                 type;   // 0: native(wrapped) 1: emulated(elf) -1: undetermined
     int                 active;
     wrappedlib_fini_t   fini;
-    wrappedlib_get_t    get;        // get weak and no weak
-    wrappedlib_get_t    getnoweak;  // get only non weak symbol
-    wrappedlib_get_t    getlocal;
+    wrappedlib_get_t    getglobal;      // get global symbol (not weak)
+    wrappedlib_get_t    getweak;        // get weak symbol
+    wrappedlib_get_t    getlocal;       // get local symbol
     union {
         wlib_t  w;     
-        nlib_t  n;
-    }                   priv;  // private lib data
-    box86context_t      *context;   // parent context
-    kh_bridgemap_t      *bridgemap;
-    kh_symbolmap_t      *symbolmap;
-    kh_symbolmap_t      *wsymbolmap;
-    kh_symbolmap_t      *mysymbolmap;
-    kh_symbolmap_t      *wmysymbolmap;
-    kh_symbolmap_t      *stsymbolmap;
-    kh_symbolmap_t      *wstsymbolmap;
-    kh_symbol2map_t     *symbol2map;
-    kh_datamap_t        *datamap;
-    kh_datamap_t        *wdatamap;
-    kh_datamap_t        *mydatamap;
-    char                *altmy;      // to avoid duplicate symbol, like with SDL1/SDL2
+        elib_t  e;
+    };  // private lib data
     needed_libs_t       needed;
     needed_libs_t       dependedby;
-    lib_t               *maplib;    // local maplib, for dlopen'd library with LOCAL binding (most of the dlopen)
+    int                 refcnt;         // refcounting the lib
+    lib_t               *maplib;        // local maplib, for dlopen'd library with LOCAL binding (most of the dlopen)
+    kh_bridgemap_t      *gbridgemap;    // global symbol bridgemap
+    kh_bridgemap_t      *wbridgemap;    // weak symbol bridgemap
+    kh_bridgemap_t      *lbridgemap;    // local symbol bridgemap
 } library_t;
 void add_neededlib(needed_libs_t* needed, library_t* lib);
 void free_neededlib(needed_libs_t* needed);
@@ -103,7 +103,7 @@ typedef struct map_onedata_s {
     int         weak;
 } map_onedata_t;
 
-int getSymbolInMaps(library_t*lib, const char* name, int noweak, uintptr_t *addr, uint32_t *size, int version, const char* vername, int local);  // Add bridges to functions
+int getSymbolInMaps(library_t*lib, const char* name, int noweak, uintptr_t *addr, uint32_t *size, int* weak, int version, const char* vername, int local);  // Add bridges to functions
 
 typedef struct linkmap_s {
     // actual struct link_map

@@ -754,6 +754,8 @@ def readFiles(files: Iterable[str]) -> Tuple[JumbledFunctions, JumbledFunctions,
 							 \
 							 or match("libc",        "tcmallocminimal") \
 							 or match("libc",        "ldlinux") 	\
+							 or match("libc",        "tbbmallocproxy") \
+							 or match("tcmallocminimal","tbbmallocproxy") \
 							:
 								# libc and ldlinux have some "__libc_" data symbols in common... TODO check if ok
 								continue
@@ -1056,8 +1058,8 @@ def generate_files(root: str, files: Iterable[str], ver: str, gbls: SortedGlobal
 		    memcpy(value+4, v->data, 2*sizeof(double));
 		{rbr}
 		
-		void* VulkanFromx86(void* src, void** save);
-		void VulkanTox86(void* src, void* save);
+		void* VulkanFromx86(void* src);
+		void VulkanTox86(void* src);
 		
 		#define ST0val ST0.d
 		
@@ -1257,7 +1259,7 @@ def generate_files(root: str, files: Iterable[str], ver: str, gbls: SortedGlobal
 			delta = 4
 			for c in args:
 				if c == 'P':
-					f.write("void* save{d} = NULL; void *arg{d} = VulkanFromx86(*(void**)(R_ESP + {d}), &save{d}); ".format(d=delta))
+					f.write("void *arg{d} = VulkanFromx86(*(void**)(R_ESP + {d})); ".format(d=delta))
 				if c == 'G':
 					f.write("my_GValue_t arg{d}; alignGValue(&arg{d}, *(void**)(R_ESP + {d})); ".format(d=delta))
 				delta = delta + deltas[FileSpec.values.index(c)]
@@ -1265,7 +1267,7 @@ def generate_files(root: str, files: Iterable[str], ver: str, gbls: SortedGlobal
 			delta = 4
 			for c in args:
 				if c == 'P':
-					f.write("VulkanTox86(arg{d}, save{d}); ".format(d=delta))
+					f.write("VulkanTox86(arg{d}); ".format(d=delta))
 				if c == 'G':
 					f.write("unalignGValue(*(void**)(R_ESP + {d}), &arg{d}); ".format(d=delta))
 				delta = delta + deltas[FileSpec.values.index(c)]

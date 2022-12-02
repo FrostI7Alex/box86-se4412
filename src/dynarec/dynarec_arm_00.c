@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #include "debug.h"
 #include "box86context.h"
@@ -21,6 +22,7 @@
 #include "dynarec_arm.h"
 #include "dynarec_arm_private.h"
 #include "arm_printer.h"
+#include "custommem.h"
 
 #include "dynarec_arm_functions.h"
 #include "dynarec_arm_helper.h"
@@ -37,6 +39,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
     uint8_t wback, wb1, wb2;
     int fixedaddress;
     int lock;
+    int cacheupd;
 
     opcode = F8;
     MAYUSE(eb1);
@@ -44,6 +47,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
     MAYUSE(tmp);
     MAYUSE(j32);
     MAYUSE(lock);
+    MAYUSE(cacheupd);
 
     switch(opcode) {
         case 0x00:
@@ -577,7 +581,16 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0x57:
             INST_NAME("PUSH reg");
             gd = xEAX+(opcode&0x07);
+            #ifdef RPI2
+            if(gd==xESP) {
+                MOV_REG(x1, gd);
+                PUSH1(x1);
+            } else {
+                PUSH1(gd);    
+            }
+            #else
             PUSH1(gd);
+            #endif
             break;
         case 0x58:
         case 0x59:
@@ -589,7 +602,16 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0x5F:
             INST_NAME("POP reg");
             gd = xEAX+(opcode&0x07);
+            #ifdef RPI2
+            if(gd==xESP) {
+                POP1(x1);
+                MOV_REG(gd, x1);
+            } else {
+                POP1(gd);    
+            }
+            #else
             POP1(gd);
+            #endif
             break;
         case 0x60:
             INST_NAME("PUSHAD");
@@ -704,11 +726,11 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 i32 = dyn->insts[ninst].epilog-(dyn->arm_size+8);       \
                 Bcond(NO, i32);                                         \
                 if(dyn->insts[ninst].x86.jmp_insts==-1) {               \
-                    if(!dyn->insts[ninst].x86.barrier)                  \
+                    if(!(dyn->insts[ninst].x86.barrier&BARRIER_FLOAT))  \
                         fpu_purgecache(dyn, ninst, 1, x1, x2, x3);      \
                     jump_to_next(dyn, addr+i8, 0, ninst);               \
                 } else {                                                \
-                    fpuCacheTransform(dyn, ninst, x1, x2, x3);          \
+                    CacheTransform(dyn, ninst, cacheupd, x1, x2, x3);   \
                     i32 = dyn->insts[dyn->insts[ninst].x86.jmp_insts].address-(dyn->arm_size+8);\
                     Bcond(c__, i32);                                    \
                 }                                                       \
@@ -993,7 +1015,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 BFI(eb1, x14, eb2*8, 8);
             } else {
                 GETGB(x14);
-                DMB_ISH();
+                SMDMB();
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 0, 0, 0, LOCK_LOCK);
                 MARKLOCK;
                 // do the swap with exclusive locking
@@ -1003,7 +1025,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 CMPS_IMM8(x3, 0);
                 B_MARKLOCK(cNE);
                 BFI(gb1, x1, gb2*8, 8);
-                DMB_ISH();
+                SMDMB();
             }
             break;
         case 0x87:
@@ -1019,7 +1041,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 }
             } else {
                 GETGD;
-                DMB_ISH();
+                SMDMB();
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 0, 0, 1, LOCK_LOCK);
                 if(!fixedaddress) {
                     TSTS_IMM8(ed, 3);
@@ -1043,7 +1065,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 if(!fixedaddress) {
                     MARK2;
                 }
-                DMB_ISH();
+                SMDMB();
                 MOV_REG(gd, x1);
             }
             break;
@@ -1067,7 +1089,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             } else {
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 4095, 0, 0, &lock);
                 STRB_IMM9(gd, ed, fixedaddress);
-                if(lock) {DMB_ISH();}
+                SMWRITELOCK(lock);
             }
             break;
         case 0x89:
@@ -1079,7 +1101,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             } else {                    // mem <= reg
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 4095, 0, 0, &lock);
                 STR_IMM9(gd, ed, fixedaddress);
-                if(lock) {DMB_ISH();}
+                SMWRITELOCK(lock);
             }
             break;
         case 0x8A:
@@ -1101,10 +1123,10 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 } else {
                     if(box86_dynarec_strongmem && 
                      (dyn->insts[ninst].x86.barrier || !ninst || (box86_dynarec_strongmem>1) || (ninst && dyn->insts[ninst-1].x86.barrier))) {
-                        DMB_ISH();
+                        SMDMB();
                     }
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 4095, 0, 0, &lock);
-                    if(lock) {DMB_ISH();}
+                    SMREADLOCK(lock);
                     LDRB_IMM9(x14, wback, fixedaddress);
                     ed = x14;
                 }
@@ -1118,10 +1140,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 MOV_REG(gd, xEAX+(nextop&7));
             } else {                    // mem <= reg
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 4095, 0, 0, &lock);
-                if(lock || (box86_dynarec_strongmem && 
-                    (dyn->insts[ninst].x86.barrier || !ninst || (box86_dynarec_strongmem>1) || (ninst && dyn->insts[ninst-1].x86.barrier)))) {
-                    DMB_ISH();
-                }
+                SMREADLOCK(lock);
                 LDR_IMM9(gd, ed, fixedaddress);
             }
             break;
@@ -1135,6 +1154,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 0, 0, 0, NULL);
                 LDRH_REG(x3, xEmu, x3);
                 STRH_IMM8(x3, ed, fixedaddress);
+                SMWRITE2();
             }
             break;
         case 0x8D:
@@ -1262,12 +1282,14 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             u32 = F32;
             MOV32(x2, u32);
             STRB_IMM9(xEAX, x2, 0);
+            SMWRITE();
             break;
         case 0xA3:
             INST_NAME("MOV Od, EAX");
             u32 = F32;
             MOV32(x2, u32);
             STR_IMM9(xEAX, x2, 0);
+            SMWRITE();
             break;
         case 0xA4:
             INST_NAME("MOVSB");
@@ -1574,7 +1596,9 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0xC2:
             INST_NAME("RETN");
             //SETFLAGS(X_ALL, SF_SET);    // Hack, set all flags (to an unknown state...)
-            READFLAGS(X_PEND);  // lets play safe here too
+            if(box86_dynarec_safeflags) {
+                READFLAGS(X_PEND);  // lets play safe here too
+            }
             BARRIER(BARRIER_FLOAT);
             i32 = F16;
             retn_to_epilog(dyn, ninst, i32);
@@ -1585,7 +1609,9 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("RET");
             // SETFLAGS(X_ALL, SF_SET);    // Hack, set all flags (to an unknown state...)
             // ^^^ that hack break PlantsVsZombies and GOG Setup under wine....
-            READFLAGS(X_PEND);  // so instead, force the defered flags, so it's not too slow, and flags are not lost
+            if(box86_dynarec_safeflags) {
+                READFLAGS(X_PEND);  // so instead, force the defered flags, so it's not too slow, and flags are not lost
+            }
             BARRIER(BARRIER_FLOAT);
             ret_to_epilog(dyn, ninst);
             *need_epilog = 0;
@@ -1607,7 +1633,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 u8 = F8;
                 MOVW(x3, u8);
                 STRB_IMM9(x3, ed, fixedaddress);
-                if(lock) {DMB_ISH();}
+                SMWRITELOCK(lock);
             }
             break;
         case 0xC7:
@@ -1622,7 +1648,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 i32 = F32S;
                 MOV32(x3, i32);
                 STR_IMM9(x3, ed, fixedaddress);
-                if(lock) {DMB_ISH();}
+                SMWRITELOCK(lock);
             }
             break;
 
@@ -1693,6 +1719,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xCD:
             SETFLAGS(X_ALL, SF_SET);    // Hack, set all flags (to an unknown state...)
+            SMEND();
             if(PK(0)==0x80) {
                 INST_NAME("Syscall");
                 u8 = F8;
@@ -2039,6 +2066,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0xD7:
             INST_NAME("XLAT");
             UBFX(x1, xEAX, 0, 8);    // x1 = AL
+            SMREAD();
             LDRB_REG_LSL_IMM5(x1, xEBX, x1, 0); //x1 = byte ptr[EBX+AL]
             BFI(xEAX, x1, 0, 8);
             break;
@@ -2075,11 +2103,11 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 i32 = dyn->insts[ninst].epilog-(dyn->arm_size+8);       \
                 Bcond(NO, i32);                                         \
                 if(dyn->insts[ninst].x86.jmp_insts==-1) {               \
-                    if(!dyn->insts[ninst].x86.barrier)                  \
+                    if(!(dyn->insts[ninst].x86.barrier&BARRIER_FLOAT))  \
                         fpu_purgecache(dyn, ninst, 1, x1, x2, x3);      \
                     jump_to_next(dyn, addr+i8, 0, ninst);               \
                 } else {                                                \
-                    fpuCacheTransform(dyn, ninst, x1, x2, x3);          \
+                    CacheTransform(dyn, ninst, cacheupd, x1, x2, x3);   \
                     i32 = dyn->insts[dyn->insts[ninst].x86.jmp_insts].address-(dyn->arm_size+8);\
                     Bcond(c__, i32);                                    \
                 }                                                       \
@@ -2132,7 +2160,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             #if STEP < 2
             if (i32==0)
                 tmp = dyn->insts[ninst].pass2choice = 1;
-            else if (((u32)>0x10000) && (PKa(u32+0)==0x8B) && (((PKa(u32+1))&0xC7)==0x04) && (PKa(u32+2)==0x24) && (PKa(u32+3)==0xC3))
+            else if ((getProtection(u32)&PROT_READ) && (PKa(u32+0)==0x8B) && (((PKa(u32+1))&0xC7)==0x04) && (PKa(u32+2)==0x24) && (PKa(u32+3)==0xC3))
                 tmp = dyn->insts[ninst].pass2choice = 2;
             /*else if(isNativeCall(dyn, u32, &dyn->insts[ninst].natcall, &dyn->insts[ninst].retn))
                 tmp = dyn->insts[ninst].pass2choice = 3;*/
@@ -2197,7 +2225,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     jump_to_epilog(dyn, 0, xEIP, ninst);
                     break;*/
                 default:
-                    if(ninst && dyn->insts[ninst-1].x86.set_flags) {
+                    if((box86_dynarec_safeflags>1) || (ninst && dyn->insts[ninst-1].x86.set_flags)) {
                         READFLAGS(X_PEND);  // that's suspicious
                     } else {
                         //SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
@@ -2235,7 +2263,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 jump_to_next(dyn, addr+i32, 0, ninst);
             } else {
                 // inside the block
-                fpuCacheTransform(dyn, ninst, x1, x2, x3);
+                CacheTransform(dyn, ninst, CHECK_CACHE(), x1, x2, x3);
                 tmp = dyn->insts[dyn->insts[ninst].x86.jmp_insts].address-(dyn->arm_size+8);
                 if(tmp==-4) {
                     NOP;
@@ -2291,7 +2319,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         break;
                     case 0xAF:
                         if(opcode==0xF2) {INST_NAME("REPNZ SCASW");} else {INST_NAME("REPZ SCASW");}
-                        SETFLAGS(X_ALL, SF_MAYSET);
+                        MAYSETFLAGS();
+                        SETFLAGS(X_ALL, SF_SET_PENDING);
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3, 2);
@@ -2350,7 +2379,11 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         break;
                     case 0xC3:
                         INST_NAME("(REPZ) RET");
-                        SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
+                        if(box86_dynarec_safeflags>1) {
+                            READFLAGS(X_PEND);
+                        } else {
+                            SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
+                        }
                         BARRIER(BARRIER_FLOAT);
                         ret_to_epilog(dyn, ninst);
                         *need_epilog = 0;
@@ -2382,7 +2415,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         break;
                     case 0xA6:
                         if(opcode==0xF2) {INST_NAME("REPNZ CMPSB");} else {INST_NAME("REPZ CMPSB");}
-                        SETFLAGS(X_ALL, SF_MAYSET);
+                        MAYSETFLAGS();
+                        SETFLAGS(X_ALL, SF_SET_PENDING);
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3,1);
@@ -2406,7 +2440,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         break;
                     case 0xA7:
                         if(opcode==0xF2) {INST_NAME("REPNZ CMPSD");} else {INST_NAME("REPZ CMPSD");}
-                        SETFLAGS(X_ALL, SF_MAYSET);
+                        MAYSETFLAGS();
+                        SETFLAGS(X_ALL, SF_SET_PENDING);
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3,4);
@@ -2471,7 +2506,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         break;
                     case 0xAE:
                         if(opcode==0xF2) {INST_NAME("REPNZ SCASB");} else {INST_NAME("REPZ SCASB");}
-                        SETFLAGS(X_ALL, SF_MAYSET);
+                        MAYSETFLAGS();
+                        SETFLAGS(X_ALL, SF_SET_PENDING);
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3,1);
@@ -2495,7 +2531,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         break;
                     case 0xAF:
                         if(opcode==0xF2) {INST_NAME("REPNZ SCASD");} else {INST_NAME("REPZ SCASD");}
-                        SETFLAGS(X_ALL, SF_MAYSET);
+                        MAYSETFLAGS();
+                        SETFLAGS(X_ALL, SF_SET_PENDING);
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3,4);
@@ -2790,7 +2827,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 2: // CALL Ed
                     INST_NAME("CALL Ed");
-                    PASS2IF(ninst && dyn->insts[ninst-1].x86.set_flags, 1) {
+                    PASS2IF((box86_dynarec_safeflags>1) || (ninst && dyn->insts[ninst-1].x86.set_flags), 1) {
                         READFLAGS(X_PEND);          // that's suspicious
                     } else {
                         //SETFLAGS(X_ALL, SF_SET);    //Hack to put flag in "don't care" state

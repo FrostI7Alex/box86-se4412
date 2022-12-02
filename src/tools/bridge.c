@@ -4,6 +4,7 @@
 #include <string.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <sys/mman.h>
 
 #include "custommem.h"
 #include "bridge.h"
@@ -13,14 +14,14 @@
 #include "debug.h"
 #include "x86emu.h"
 #include "box86context.h"
+#include "elfloader.h"
 #ifdef DYNAREC
 #include "dynablock.h"
 #endif
 
 KHASH_MAP_INIT_INT(bridgemap, uintptr_t)
 
-//onebrigde is 16 bytes
-#define NBRICK  4096/16
+#define NBRICK  (4096/sizeof(onebridge_t))
 typedef struct brick_s brick_t;
 typedef struct brick_s {
     onebridge_t *b;
@@ -34,18 +35,28 @@ typedef struct bridge_s {
     kh_bridgemap_t  *bridgemap;
 } bridge_t;
 
-brick_t* NewBrick()
+void* my_mmap(x86emu_t* emu, void* addr, unsigned long length, int prot, int flags, int fd, int offset);
+int my_munmap(x86emu_t* emu, void* addr, unsigned long length);
+brick_t* NewBrick(void* old)
 {
-    brick_t* ret = (brick_t*)calloc(1, sizeof(brick_t));
-    if(posix_memalign((void**)&ret->b, box86_pagesize, NBRICK*sizeof(onebridge_t)))
+    brick_t* ret = (brick_t*)box_calloc(1, sizeof(brick_t));
+    if(old)
+        old = old + NBRICK * sizeof(onebridge_t);
+    void* ptr = my_mmap(NULL, old, NBRICK * sizeof(onebridge_t), PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if(ptr == MAP_FAILED)
+        ptr = my_mmap(NULL, NULL, NBRICK * sizeof(onebridge_t), PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if(ptr == MAP_FAILED) {
         printf_log(LOG_NONE, "Warning, cannot allocate 0x%x aligned bytes for bridge, will probably crash later\n", NBRICK*sizeof(onebridge_t));
+    }
+    dynarec_log(LOG_INFO, "New Bridge brick at %p (size 0x%x)\n", ptr, NBRICK*sizeof(onebridge_t));
+    ret->b = ptr;
     return ret;
 }
 
 bridge_t *NewBridge()
 {
-    bridge_t *b = (bridge_t*)calloc(1, sizeof(bridge_t));
-    b->head = NewBrick();
+    bridge_t *b = (bridge_t*)box_calloc(1, sizeof(bridge_t));
+    b->head = NewBrick(NULL);
     b->last = b->head;
     b->bridgemap = kh_init(bridgemap);
 
@@ -64,14 +75,14 @@ void FreeBridge(bridge_t** bridge)
         brick_t *n = b->next;
         #ifdef DYNAREC
         if(getProtection((uintptr_t)b->b)&(PROT_DYNAREC|PROT_DYNAREC_R))
-            unprotectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t), 1);
+            unprotectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t), 0);
         #endif
-        free(b->b);
-        free(b);
+        my_munmap(NULL, b->b, NBRICK*sizeof(onebridge_t));
+        box_free(b);
         b = n;
     }
     kh_destroy(bridgemap, br->bridgemap);
-    free(br);
+    box_free(br);
 }
 
 #ifdef HAVE_TRACE
@@ -90,7 +101,7 @@ uintptr_t AddBridge(bridge_t* bridge, wrapper_t w, void* fnc, int N, const char*
         pthread_mutex_lock(&my_context->mutex_bridge);
         b = bridge->last;
         if(b->sz == NBRICK) {
-            b->next = NewBrick();
+            b->next = NewBrick(b->b);
             b = b->next;
             bridge->last = b;
         }
@@ -100,9 +111,7 @@ uintptr_t AddBridge(bridge_t* bridge, wrapper_t w, void* fnc, int N, const char*
         if(box86_dynarec) {
             prot=(getProtection((uintptr_t)&b->b[sz])&(PROT_DYNAREC|PROT_DYNAREC_R))?1:0;
             if(prot)
-                unprotectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t), 0);
-            else    // only add DB if there is no protection
-                addDBFromAddressRange((uintptr_t)&b->b[sz].CC, sizeof(onebridge_t));
+                unprotectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t), 0);    // don't mark blocks, it's only new one
         }
     } while(sz!=b->sz); // this while loop if someone took the slot when the bridge mutex was unlocked doing memory protection managment
     pthread_mutex_lock(&my_context->mutex_bridge);
@@ -172,9 +181,11 @@ void* GetNativeFnc(uintptr_t fnc)
 {
     if(!fnc) return NULL;
     // check if function exist in some loaded lib
-    Dl_info info;
-    if(dladdr((void*)fnc, &info))
-        return (void*)fnc;
+    if(!FindElfAddress(my_context, fnc)) {
+        Dl_info info;
+        if(dladdr((void*)fnc, &info))
+            return (void*)fnc;
+    }
     if(!getProtection(fnc))
         return NULL;
     // check if it's an indirect jump

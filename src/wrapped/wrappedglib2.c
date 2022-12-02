@@ -873,7 +873,7 @@ EXPORT void* my_g_main_context_get_poll_func(x86emu_t* emu, void* context)
     void* r = reversePollFct(ret);
     if(r) return r;
     // needs to bridge....
-    return (void*)AddCheckBridge(my_lib->priv.w.bridge, iFpui, ret, 0, NULL);
+    return (void*)AddCheckBridge(my_lib->w.bridge, iFpui, ret, 0, NULL);
 }
     
 EXPORT void my_g_main_context_set_poll_func(x86emu_t* emu, void* context, void* func)
@@ -1161,12 +1161,11 @@ EXPORT void* my_g_build_path(x86emu_t *emu, void* sep, void* first, void** data)
         p = data[n++];
     }
     ++n;    // final NULL
-    void** args = (void**)malloc(n *sizeof(void*));
+    void** args = (void**)alloca(n *sizeof(void*));
     args[0] = first;
     for(int i=1; i<n; ++i)
         args[i] = data[i-1];
     p = my->g_build_pathv(sep, args);
-    free(args);
     return p;
 }
 
@@ -1256,6 +1255,10 @@ EXPORT void my_g_option_context_add_main_entries(x86emu_t* emu, void* context, m
     }
 }
 
+EXPORT void my_g_list_foreach(x86emu_t* emu, void* list, void* f, void* data)
+{
+    my->g_list_foreach(list, findGFuncFct(f), data);
+}
 
 #define PRE_INIT    \
     if(box86_nogtk) \

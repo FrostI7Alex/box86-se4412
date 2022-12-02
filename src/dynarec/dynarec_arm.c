@@ -74,7 +74,7 @@ void add_next(dynarec_arm_t *dyn, uintptr_t addr) {
     // add slots
     if(dyn->next_sz == dyn->next_cap) {
         dyn->next_cap += 16;
-        dyn->next = (uintptr_t*)realloc(dyn->next, dyn->next_cap*sizeof(uintptr_t));
+        dyn->next = (uintptr_t*)box_realloc(dyn->next, dyn->next_cap*sizeof(uintptr_t));
     }
     dyn->next[dyn->next_sz++] = addr;
 }
@@ -251,7 +251,7 @@ static instsize_t* addInst(instsize_t* insts, size_t* size, size_t* cap, int x86
         toadd = 1 + arm_size/15;
     if((*size)+toadd>(*cap)) {
         *cap = (*size)+toadd;
-        insts = (instsize_t*)realloc(insts, (*cap)*sizeof(instsize_t));
+        insts = (instsize_t*)box_realloc(insts, (*cap)*sizeof(instsize_t));
     }
     while(toadd) {
         if(x86_size>15)
@@ -288,7 +288,7 @@ static void fillPredecessors(dynarec_arm_t* dyn)
             ++dyn->insts[i+1].pred_sz;
         }
     }
-    dyn->predecessor = (int*)malloc(pred_sz*sizeof(int));
+    dyn->predecessor = (int*)box_malloc(pred_sz*sizeof(int));
     // fill pred pointer
     int* p = dyn->predecessor;
     for(int i=0; i<dyn->size; ++i) {
@@ -306,58 +306,51 @@ static void fillPredecessors(dynarec_arm_t* dyn)
 
 }
 
-static void updateNeed(dynarec_arm_t* dyn, int ninst, uint32_t need) {
-    uint32_t old_need = dyn->insts[ninst].x86.need_flags;
-    uint32_t new_need = old_need | need;
-    uint32_t new_use = dyn->insts[ninst].x86.use_flags;
-    uint32_t old_use = dyn->insts[ninst].x86.old_use;
-
-    if((new_need&X_PEND) && dyn->insts[ninst].x86.state_flags==SF_SUBSET) {
-        new_need &=~X_PEND;
-        new_need |= X_ALL;
-    } else if((new_need&X_PEND) && dyn->insts[ninst].x86.state_flags==SF_SUBSET_PENDING) {
-        new_need |= X_ALL&~dyn->insts[ninst].x86.set_flags;
+// updateNeed goes backward, from last intruction to top
+static int updateNeed(dynarec_arm_t* dyn, int ninst, uint8_t need) {
+    while (ninst>=0) {
+        // need pending but instruction is only a subset: remove pend and use an X_ALL instead
+        need |= dyn->insts[ninst].x86.need_after;
+        if((need&X_PEND) && (dyn->insts[ninst].x86.state_flags==SF_SUBSET)) {
+            need &=~X_PEND;
+            need |= X_ALL;
+        }
+        if((need&X_PEND) && (dyn->insts[ninst].x86.state_flags==SF_SET)) {
+            need &=~X_PEND;
+            need |= dyn->insts[ninst].x86.set_flags;    // SF_SET will compute all flags, it's not SUBSET!
+        }
+        if((need&X_PEND) && dyn->insts[ninst].x86.state_flags==SF_SUBSET_PENDING) {
+            need |= X_ALL&~(dyn->insts[ninst].x86.set_flags);
+        }
+        dyn->insts[ninst].x86.gen_flags = need&dyn->insts[ninst].x86.set_flags;
+        if((need&X_PEND) && (dyn->insts[ninst].x86.state_flags&SF_PENDING))
+            dyn->insts[ninst].x86.gen_flags |= X_PEND;
+        dyn->insts[ninst].x86.need_after = need;
+        need = dyn->insts[ninst].x86.need_after&~dyn->insts[ninst].x86.gen_flags;
+        if(dyn->insts[ninst].x86.may_set)
+            need |= dyn->insts[ninst].x86.gen_flags;    // forward the flags
+        // Consume X_PEND if relevant
+        if((need&X_PEND) && (dyn->insts[ninst].x86.set_flags&SF_PENDING))
+            need &=~X_PEND;
+        need |= dyn->insts[ninst].x86.use_flags;
+        if(dyn->insts[ninst].x86.need_before == need)
+            return ninst - 1;
+        dyn->insts[ninst].x86.need_before = need;
+        if(dyn->insts[ninst].x86.barrier&BARRIER_FLAGS) {
+            need = need?X_PEND:0;
+        }
+        int ok = 0;
+        for(int i=0; i<dyn->insts[ninst].pred_sz; ++i) {
+            if(dyn->insts[ninst].pred[i] == ninst-1)
+                ok = 1;
+            else
+                updateNeed(dyn, dyn->insts[ninst].pred[i], need);
+        }
+        if(!ok)
+            return ninst - 1;
+        --ninst;
     }
-
-    uint32_t new_set = 0;
-    if(dyn->insts[ninst].x86.state_flags & SF_SET)
-        new_set = dyn->insts[ninst].x86.set_flags;
-    if(dyn->insts[ninst].x86.state_flags & SF_PENDING)
-        new_set |= X_PEND;
-    if((new_need&X_PEND) && (
-        dyn->insts[ninst].x86.state_flags==SF_SET || dyn->insts[ninst].x86.state_flags==SF_SUBSET)) {
-        new_need &=~X_PEND;
-        new_need |=X_ALL;
-    }
-    
-    dyn->insts[ninst].x86.need_flags = new_need;
-    dyn->insts[ninst].x86.old_use = new_use;
-
-    if(dyn->insts[ninst].x86.jmp_insts==-1)
-        new_need |= X_PEND;
-
-    if((new_need == old_need) && (new_use == old_use))    // no changes, bye
-        return;
-
-    new_need &=~new_set;    // clean needed flag that were suplied
-    new_need |= new_use;    // new need
-    // a Flag Barrier will change all need to "Pending", as it clear all flags optimisation
-    if(new_need && dyn->insts[ninst].x86.barrier&BARRIER_FLAGS)
-        new_need = X_PEND;
-
-    if((new_need == (X_ALL|X_PEND)) && (dyn->insts[ninst].x86.state_flags & SF_SET))
-        new_need = X_ALL;
-
-    //update need to new need on predecessor
-    for(int i=0; i<dyn->insts[ninst].pred_sz; ++i)
-        updateNeed(dyn, dyn->insts[ninst].pred[i], new_need);
-}
-
-static void resetNeed(dynarec_arm_t* dyn) {
-    for(int i = dyn->size; i-- > 0;) {
-        dyn->insts[i].x86.old_use = 0;
-        dyn->insts[i].x86.need_flags = dyn->insts[i].x86.default_need;
-    }
+    return ninst;
 }
 
 uintptr_t arm_pass0(dynarec_arm_t* dyn, uintptr_t addr);
@@ -373,17 +366,19 @@ void CancelBlock()
     current_helper = NULL;
     if(!helper)
         return;
-    free(helper->next);
-    free(helper->insts);
-    free(helper->predecessor);
-    free(helper->sons_x86);
-    free(helper->sons_arm);
+    box_free(helper->next);
+    box_free(helper->insts);
+    box_free(helper->predecessor);
     if(helper->dynablock && helper->dynablock->block)
         FreeDynarecMap(helper->dynablock, (uintptr_t)helper->dynablock->block, helper->dynablock->size);
 }
 
 void* FillBlock(dynablock_t* block, uintptr_t addr) {
 dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
+    if(IsInHotPage(addr)) {
+        dynarec_log(LOG_DEBUG, "Cancelling dynarec FillBlock on hotpage for %p\n", (void*)addr);
+        return NULL;
+    }
     if(addr>=box86_nodynarec_start && addr<box86_nodynarec_end) {
         dynarec_log(LOG_DEBUG, "Asked to fill a block in fobidden zone\n");
         return NULL;
@@ -392,6 +387,8 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
         dynarec_log(LOG_DEBUG, "Asked to fill a block at %p, but JumpTable is not default\n", (void*)addr);
         return NULL;
     }
+    // protect the 1st page
+    protectDB(addr, 1);
     // init the helper
     dynarec_arm_t helper = {0};
     current_helper = &helper;
@@ -399,11 +396,11 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
     helper.start = addr;
     uintptr_t start = addr;
     helper.cap = 64; // needs epilog handling
-    helper.insts = (instruction_arm_t*)calloc(helper.cap, sizeof(instruction_arm_t));
+    helper.insts = (instruction_arm_t*)box_calloc(helper.cap, sizeof(instruction_arm_t));
     // pass 0, addresses, x86 jump addresses, overall size of the block
     uintptr_t end = arm_pass0(&helper, addr);
     // no need for next anymore
-    free(helper.next);
+    box_free(helper.next);
     helper.next_sz = helper.next_cap = 0;
     helper.next = NULL;
     // basic checks
@@ -412,20 +409,24 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
         CancelBlock();
         return (void*)block;
     }
+    if(!isprotectedDB(addr, 1)) {
+        dynarec_log(LOG_INFO, "Warning, write on current page on pass0, aborting dynablock creation (%p)\n", (void*)addr);
+        AddHotPage(addr);
+        CancelBlock();
+        return NULL;
+    }
     // already protect the block and compute hash signature
-    protectDB(addr, end-addr);  //end is 1byte after actual end
+    // protect the block of it goes over the 1st page
+    if((addr&~box86_pagesize)!=(end&~box86_pagesize)) // need to protect some other pages too
+        protectDB(addr, end-addr);  //end is 1byte after actual end
     uint32_t hash = X31_hash_code((void*)addr, end-addr);
-    // Compute flag_need, without current barriers
-    resetNeed(&helper);
-    for(int i = helper.size; i-- > 0;)
-        updateNeed(&helper, i, 0);
     // calculate barriers
     for(int i=0; i<helper.size; ++i)
         if(helper.insts[i].x86.jmp) {
             uintptr_t j = helper.insts[i].x86.jmp;
             if(j<start || j>=end) {
                 helper.insts[i].x86.jmp_insts = -1;
-                helper.insts[i].x86.use_flags |= X_PEND;
+                helper.insts[i].x86.need_after |= X_PEND;
             } else {
                 // find jump address instruction
                 int k=-1;
@@ -440,65 +441,10 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
         }
     // fill predecessors with the jump address
     fillPredecessors(&helper);
-    // check for the optionnal barriers now
-    for(int i=helper.size-1; i>=0; --i) {
-        if(helper.insts[i].barrier_maybe) {
-            // out-of-block jump
-            if(helper.insts[i].x86.jmp_insts == -1) {
-                // nothing for now
-            } else {
-                // inside block jump
-                int k = helper.insts[i].x86.jmp_insts;
-                if(k>i) {
-                    // jump in the future
-                    if(helper.insts[k].pred_sz>1) {
-                        // with multiple flow, put a barrier
-                        helper.insts[k].x86.barrier|=BARRIER_FLAGS;
-                    }
-                } else {
-                    // jump back
-                    helper.insts[k].x86.barrier|=BARRIER_FLAGS;
-                }
-            }
-	}
-    }
-    // check to remove useless barrier, in case of jump when destination doesn't needs flags
-    /*for(int i=helper.size-1; i>=0; --i) {
-        int k;
-        if(helper.insts[i].x86.jmp
-        && ((k=helper.insts[i].x86.jmp_insts)>=0)
-        && helper.insts[k].x86.barrier&BARRIER_FLAGS) {
-            //TODO: optimize FPU barrier too
-            if((!helper.insts[k].x86.need_flags)
-             ||(helper.insts[k].x86.set_flags==X_ALL
-                  && helper.insts[k].x86.state_flags==SF_SET)
-             ||(helper.insts[k].x86.state_flags==SF_SET_PENDING)) {
-                //if(box86_dynarec_dump) dynarec_log(LOG_NONE, "Removed barrier for inst %d\n", k);
-                helper.insts[k].x86.barrier &= ~BARRIER_FLAGS; // remove flag barrier
-             }
-        }
-    }*/
-    // reset need_flags and compute again, now taking barrier into account (because barrier change use_flags)
-    for(int i = helper.size; i-- > 0;) {
-        int k;
-        if(helper.insts[i].x86.jmp 
-        && ((k=helper.insts[i].x86.jmp_insts)>=0)
-        ) {
-            if(helper.insts[k].x86.barrier&BARRIER_FLAGS)
-                // jumpto barrier
-                helper.insts[i].x86.use_flags |= X_PEND;
-            if(helper.insts[i].x86.barrier&BARRIER_FLAGS && (helper.insts[k].x86.need_flags | helper.insts[k].x86.use_flags))
-                helper.insts[k].x86.barrier|=BARRIER_FLAGS;
-            else
-                helper.insts[i].x86.use_flags |= (helper.insts[k].x86.need_flags | helper.insts[k].x86.use_flags);
-        }
-        if(helper.insts[i].x86.barrier&BARRIER_FLAGS && !(helper.insts[i].x86.set_flags&SF_PENDING))
-            // immediate barrier
-            helper.insts[i].x86.use_flags |= X_PEND;
-    }
-    resetNeed(&helper);
-    for(int i = helper.size; i-- > 0;)
-        updateNeed(&helper, i, 0);
+
+    int pos = helper.size;
+    while (pos>=0)
+        pos = updateNeed(&helper, pos, 0);
 
     // pass 1, float optimisations, first pass for flags
     arm_pass1(&helper, addr);
@@ -516,8 +462,8 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
     helper.block = p;
     helper.arm_start = (uintptr_t)p;
     if(helper.sons_size) {
-        helper.sons_x86 = (uintptr_t*)calloc(helper.sons_size, sizeof(uintptr_t));
-        helper.sons_arm = (void**)calloc(helper.sons_size, sizeof(void*));
+        helper.sons_x86 = (uintptr_t*)alloca(helper.sons_size*sizeof(uintptr_t));
+        helper.sons_arm = (void**)alloca(helper.sons_size*sizeof(void*));
     }
     // pass 3, emit (log emit arm opcode)
     if(box86_dynarec_dump) {
@@ -547,15 +493,15 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
         for(int i=0; i<helper.size; ++i)
             cap += 1 + ((helper.insts[i].x86.size>helper.insts[i].size)?helper.insts[i].x86.size:helper.insts[i].size)/15;
         size_t size = 0;
-        block->instsize = (instsize_t*)calloc(cap, sizeof(instsize_t));
+        block->instsize = (instsize_t*)box_calloc(cap, sizeof(instsize_t));
         for(int i=0; i<helper.size; ++i)
             block->instsize = addInst(block->instsize, &size, &cap, helper.insts[i].x86.size, helper.insts[i].size/4);
         block->instsize = addInst(block->instsize, &size, &cap, 0, 0);    // add a "end of block" mark, just in case
     }
     // ok, free the helper now
-    free(helper.insts);
+    box_free(helper.insts);
     helper.insts = NULL;
-    free(helper.next);
+    box_free(helper.next);
     helper.next = NULL;
     block->size = sz;
     block->isize = helper.size;
@@ -570,13 +516,20 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
     if(block->hash != hash) {
         dynarec_log(LOG_INFO, "Warning, a block changed while beeing processed hash(%p:%d)=%x/%x\n", block->x86_addr, block->x86_size, block->hash, hash);
         CancelBlock();
+        AddHotPage(addr);
         return NULL;
+    }
+    if(!isprotectedDB(addr, end-addr)) {
+        dynarec_log(LOG_DEBUG, "Warning, block unprotected while beeing processed %p:%ld, cancelling\n", block->x86_addr, block->x86_size);
+        AddHotPage(addr);
+        block->need_test = 1;
+        //protectDB(addr, end-addr);
     }
     // fill sons if any
     dynablock_t** sons = NULL;
     int sons_size = 0;
     if(helper.sons_size) {
-        sons = (dynablock_t**)calloc(helper.sons_size, sizeof(dynablock_t*));
+        sons = (dynablock_t**)box_calloc(helper.sons_size, sizeof(dynablock_t*));
         for (int i=0; i<helper.sons_size; ++i) {
             int created = 1;
             dynablock_t *son = AddNewDynablock(block->parent, helper.sons_x86[i], &created);
@@ -596,14 +549,10 @@ dynarec_log(LOG_DEBUG, "Asked to Fill block %p with %p\n", block, (void*)addr);
             block->sons = sons;
             block->sons_size = sons_size;
         } else
-            free(sons);
+            box_free(sons);
     }
-    free(helper.predecessor);
+    box_free(helper.predecessor);
     helper.predecessor = NULL;
-    free(helper.sons_x86);
-    helper.sons_x86 = NULL;
-    free(helper.sons_arm);
-    helper.sons_arm = NULL;
     current_helper = NULL;
     block->done = 1;
     return (void*)block;

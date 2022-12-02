@@ -251,6 +251,7 @@ void jump_to_epilog(dynarec_arm_t* dyn, uintptr_t ip, int reg, int ninst)
     }
     PASS3(void* epilog = arm_epilog);
     MOV32_(2, (uintptr_t)epilog);
+    SMEND();
     BX(2);
 }
 
@@ -277,6 +278,7 @@ void jump_to_next(dynarec_arm_t* dyn, uintptr_t ip, int reg, int ninst)
     #ifdef HAVE_TRACE
     MOV_REG(x2, 15);    // move current PC to x2, for tracing
     #endif
+    SMEND();
     BX(x3);
 }
 
@@ -293,6 +295,7 @@ void ret_to_epilog(dynarec_arm_t* dyn, int ninst)
         #ifdef HAVE_TRACE
         MOV_REG(x2, 15);    // move current PC to x2, for tracing
         #endif
+        SMEND();
         BX(x3);
 }
 
@@ -315,6 +318,7 @@ void retn_to_epilog(dynarec_arm_t* dyn, int ninst, int n)
         #ifdef HAVE_TRACE
         MOV_REG(x2, 15);    // move current PC to x2, for tracing
         #endif
+        SMEND();
         BX(x3);
 }
 
@@ -337,6 +341,7 @@ void iret_to_epilog(dynarec_arm_t* dyn, int ninst)
     SET_DFNONE(x1);
     // Ret....
     MOV32_(x2, (uintptr_t)arm_epilog);  // epilog on purpose, CS might have changed!
+    SMEND();
     BX(x2);
 }
 
@@ -1105,7 +1110,7 @@ void x87_swapreg(dynarec_arm_t* dyn, int ninst, int s1, int s2, int a, int b)
 // Set rounding according to mxcsr flags, return reg to restore flags
 int sse_setround(dynarec_arm_t* dyn, int ninst, int s1, int s2, int s3)
 {
-    LDRH_IMM8(s1, xEmu, offsetof(x86emu_t, mxcsr));
+    LDR_IMM9(s1, xEmu, offsetof(x86emu_t, mxcsr));
     UBFX(s2, s1, 13, 2);    // extract round...
     MOV32(s1, round_map);
     LDR_REG_LSL_IMM5(s2, s1, s2, 2);
@@ -1596,7 +1601,7 @@ static void unloadCache(dynarec_arm_t* dyn, int ninst, int stack_cnt, int s1, in
     cache->neoncache[i].v = 0;
 }
 
-void fpuCacheTransform(dynarec_arm_t* dyn, int ninst, int s1, int s2, int s3)
+static void fpuCacheTransform(dynarec_arm_t* dyn, int ninst, int s1, int s2, int s3)
 {
 #if STEP > 1
     int i2 = dyn->insts[ninst].x86.jmp_insts;
@@ -1753,6 +1758,59 @@ void fpuCacheTransform(dynarec_arm_t* dyn, int ninst, int s1, int s2, int s3)
     }
     MESSAGE(LOG_DUMP, "\t---- Cache Transform\n");
 #endif
+}
+static void flagsCacheTransform(dynarec_arm_t* dyn, int ninst, int s1)
+{
+#if STEP > 1
+    int j32;
+    int jmp = dyn->insts[ninst].x86.jmp_insts;
+    if(jmp<0)
+        return;
+    if(dyn->f.dfnone)  // flags are fully known, nothing we can do more
+        return;
+    MESSAGE(LOG_DUMP, "\tFlags fetch ---- ninst=%d -> %d\n", ninst, jmp);
+    int go = 0;
+    switch (dyn->insts[jmp].f_entry.pending) {
+        case SF_UNKNOWN: break;
+        case SF_SET: 
+            if(dyn->f.pending!=SF_SET && dyn->f.pending!=SF_SET_PENDING) 
+                go = 1; 
+            break;
+        case SF_SET_PENDING:
+            if(dyn->f.pending!=SF_SET 
+            && dyn->f.pending!=SF_SET_PENDING
+            && dyn->f.pending!=SF_PENDING) 
+                go = 1; 
+            break;
+        case SF_PENDING:
+            if(dyn->f.pending!=SF_SET 
+            && dyn->f.pending!=SF_SET_PENDING
+            && dyn->f.pending!=SF_PENDING)
+                go = 1;
+            else
+                go = (dyn->insts[jmp].f_entry.dfnone  == dyn->f.dfnone)?0:1;
+            break;
+    }
+    if(dyn->insts[jmp].f_entry.dfnone && !dyn->f.dfnone)
+        go = 1;
+    if(go) {
+        if(dyn->f.pending!=SF_PENDING) {
+            LDR_IMM9(s1, xEmu, offsetof(x86emu_t, df));
+            TSTS_REG_LSL_IMM5(s1, s1, 0);
+            j32 = (GETMARK3)-(dyn->arm_size+8);
+            Bcond(cEQ, j32);
+        }
+        CALL_(UpdateFlags, -1, 0);
+        MARK3;
+    }
+#endif
+}
+
+void CacheTransform(dynarec_arm_t* dyn, int ninst, int cacheupd, int s1, int s2, int s3) {
+    if(cacheupd&1)
+        fpuCacheTransform(dyn, ninst, s1, s2, s3);
+    if(cacheupd&2)
+        flagsCacheTransform(dyn, ninst, s1);
 }
 
 #ifdef HAVE_TRACE

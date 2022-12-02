@@ -71,6 +71,14 @@
                     goto _default;
             }
             NEXT;
+        _0f_0x0E:                      /* FEMMS */
+            emu->old_ip = R_EIP;
+            R_EIP = ip-2;
+            emit_signal(emu, SIGILL, (void*)R_EIP, 0);
+            ip = R_EIP;
+            if(emu->quit) goto fini;
+            STEP;
+            NEXT;
 
         _0f_0x10:                      /* MOVUPS Gx,Ex */
             nextop = F8;
@@ -290,6 +298,17 @@
                     for (int i=0; i<2; ++i) {
                         GM.sd[i] = abs(EM->sd[i]);
                     }
+                    break;
+
+                case 0xF0: /* MOVBE Gd, Ed*/
+                    nextop = F8;
+                    GET_ED;
+                    GD.dword[0] = __builtin_bswap32(ED->dword[0]);
+                    break;
+                case 0xF1: /* MOVBE Ed, Gd*/
+                    nextop = F8;
+                    GET_ED;
+                    ED->dword[0] = __builtin_bswap32(GD.dword[0]);
                     break;
 
                 default:

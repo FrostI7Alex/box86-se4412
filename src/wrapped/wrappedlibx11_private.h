@@ -307,7 +307,7 @@ GO(_XEatDataWords, vFpu)
 //GO(XEHeadOfExtensionList
 GO(XEmptyRegion, iFp)
 //GO(XEnableAccessControl
-// _XEnq
+GO(_XEnq, vFpp)
 GO(XEqualRegion, iFpp)
 // _XError
 DATAB(_XErrorFunction, 4)
@@ -362,7 +362,7 @@ GO(XFreeCursor, iFpp)
 DATAB(_XFreeDisplayLock_fn, 4)
 // _XFreeDisplayStructure
 // _XFreeEventCookies
-GO(XFreeEventData, vFpp)
+GOM(XFreeEventData, vFEpp)
 // _XFreeExtData
 GO(XFreeExtensionList, iFp)
 GO(XFreeFont, iFpp)
@@ -389,7 +389,7 @@ GO(XGetCommand, iFpppp)
 GO(XGetDefault, pFppp)
 GO(XGetErrorDatabaseText, iFpppppi)
 GO(XGetErrorText, iFpipi)
-GO(XGetEventData, iFpp)
+GOM(XGetEventData, iFEpp)
 GO(XGetFontPath, pFpp)
 GO(XGetFontProperty, iFppp)
 GO(XGetGCValues, iFppup)

@@ -56,6 +56,109 @@ static int mainloop_inited = 0;
 static my_pa_mainloop_api_t* my_mainloop_ref = NULL;
 static my_pa_mainloop_api_t* my_mainloop_orig = NULL;
 
+// Alignment of structures
+typedef struct my_pa_cvolume_s {
+    uint8_t channels;
+    uint32_t values[32];
+} my_pa_cvolume_t;
+
+typedef struct x86_pa_cvolume_s {
+    uint8_t channels;
+    uint8_t dummy1, dummy2, dummy3; // this is aligned on x86
+    uint32_t values[32];
+} x86_pa_cvolume_t;
+
+typedef struct pa_sample_spec {
+    int format;
+    uint32_t rate;
+    uint8_t channels;
+} pa_sample_spec;
+
+typedef struct my_pa_channel_map_s {
+    uint8_t channels;
+    int map[32];
+} my_pa_channel_map_t;
+
+typedef struct x86_pa_channel_map_s {
+    uint8_t channels;
+    uint8_t dummy1, dummy2, dummy3; // this is aligned on x86
+    int map[32];
+} x86_pa_channel_map_t;
+
+// pa_sink_info
+#define SUPER()                             \
+    GO(const char*, name)                   \
+    GO(uint32_t, index)                     \
+    GO(const char*, description)            \
+    GO(pa_sample_spec, sample_spec)         \
+    GOS(pa_channel_map, channel_map)        \
+    GO(uint32_t, owner_module)              \
+    GOS(pa_cvolume, volume)                 \
+    GO(int, mute)                           \
+    GO(uint32_t, monitor_source)            \
+    GO(const char*, monitor_source_name)    \
+    GO(uint64_t, latency)                   \
+    GO(const char*, driver)                 \
+    GO(int, flags)                          \
+    GO(void*, proplist)                     \
+    GO(uint64_t, configured_latency)        \
+    GO(uint32_t, base_volume)               \
+    GO(int, state)                          \
+    GO(uint32_t, n_volume_steps)            \
+    GO(uint32_t, card)                      \
+    GO(uint32_t, n_ports)                   \
+    GO(void**, ports)                       \
+    GO(void*, active_port)                  \
+    GO(uint8_t, n_formats)                  \
+    GOA(uint8_t, dummy1)                    \
+    GOA(uint8_t, dummy2)                    \
+    GOA(uint8_t, dummy3)                    \
+    GO(void**, formats)                     \
+
+#define GO(A, B)    A B;
+#define GOS(A, B)   my_##A##_t B;
+#define GOA(A, B)
+typedef struct my_pa_sink_info_s {
+    SUPER()
+} my_pa_sink_info_t;
+
+#undef GOS
+#undef GOA
+#define GOS(A, B)   x86_##A##_t B;
+#define GOA(A, B)   A B;
+typedef struct __attribute__((packed)) x86_pa_sink_info_s {
+    SUPER()
+} x86_pa_sink_info_t;
+#undef GOA
+#undef GOS
+#undef GO
+#define GO(A, B) dst->B = src->B;
+#define GOA(A, B)
+#define GOS(A, B)
+static void align_pa_sink_info(my_pa_sink_info_t* dst, x86_pa_sink_info_t* src)
+{
+    if(!src)
+        return;
+    SUPER()
+    dst->channel_map.channels = src->channel_map.channels;
+    memcpy(dst->channel_map.map, src->channel_map.map, sizeof(dst->channel_map.map));
+    dst->volume.channels = src->volume.channels;
+    memcpy(dst->volume.values, src->volume.values, sizeof(dst->volume.values));
+}
+static void unalign_pa_sink_info(x86_pa_sink_info_t* dst, my_pa_sink_info_t* src)
+{
+    if(!src)
+        return;
+    SUPER()
+    dst->channel_map.channels = src->channel_map.channels;
+    memcpy(dst->channel_map.map, src->channel_map.map, sizeof(dst->channel_map.map));
+    dst->volume.channels = src->volume.channels;
+    memcpy(dst->volume.values, src->volume.values, sizeof(dst->volume.values));
+}
+#undef GO
+#undef GOA
+#undef GOS
+#undef SUPER
 
 // utility functions
 #define SUPER() \
@@ -437,6 +540,30 @@ static void* find_module_info_Fct(void* fct)
     printf_log(LOG_NONE, "Warning, no more slot for pulse audio module_info callback\n");
     return NULL;
 }
+// sink_info
+#define GO(A)                                                                           \
+static uintptr_t my_sink_info_fct_##A = 0;                                              \
+static void my_sink_info_##A(void* context, my_pa_sink_info_t* i, int eol, void* data)  \
+{                                                                                       \
+    x86_pa_sink_info_t info = {0};                                                      \
+    unalign_pa_sink_info(&info, i);                                                     \
+    RunFunction(my_context, my_sink_info_fct_##A, 4, context, i?&info:NULL, eol, data); \
+}
+SUPER()
+#undef GO
+static void* find_sink_info_Fct(void* fct)
+{
+    if(!fct) return fct;
+    if(GetNativeFnc((uintptr_t)fct))  return GetNativeFnc((uintptr_t)fct);
+    #define GO(A) if(my_sink_info_fct_##A == (uintptr_t)fct) return my_sink_info_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_sink_info_fct_##A == 0) {my_sink_info_fct_##A = (uintptr_t)fct; return my_sink_info_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for pulse audio sink_info callback\n");
+    return NULL;
+}
 // server_info
 #define GO(A)                                                               \
 static uintptr_t my_server_info_fct_##A = 0;                                \
@@ -816,7 +943,7 @@ static void* my_io_new(void* api, int fd, int events, void* cb, void *userdata)
         return ((pFpiipp_t)fnc)(api, fd, events, cb, userdata);
     }
 
-    bridge_t* bridge = my_context->pulse->priv.w.bridge;
+    bridge_t* bridge = my_lib->w.bridge;
     if(cb)
         b = AddCheckBridge(bridge, vFppiip, cb, 0, NULL);
     if(api==my_mainloop_orig) api=my_mainloop_ref;    // need emulated version
@@ -847,7 +974,7 @@ static void my_io_set_destroy(void* e, void* cb)
     if(fnc)
         return ((vFpp_t)fnc)(e, cb);
 
-    bridge_t* bridge = my_context->pulse->priv.w.bridge;
+    bridge_t* bridge = my_lib->w.bridge;
     uintptr_t b = 0;
     if(cb) {
         b = CheckBridged(bridge, cb);
@@ -868,7 +995,7 @@ static void* my_time_new(void* api, void* tv, void* cb, void* data)
     }
 
     // need to bridge the callback!
-    bridge_t* bridge = my_context->pulse->priv.w.bridge;
+    bridge_t* bridge = my_lib->w.bridge;
     if(cb)
         b = AddCheckBridge(bridge, vFpppp, cb, 0, NULL);
     if(api==my_mainloop_orig) api=my_mainloop_ref;    // need emulated version
@@ -899,7 +1026,7 @@ static void my_time_set_destroy(void* e, void* cb)
     if(fnc)
         return ((vFpp_t)fnc)(e, cb);
 
-    bridge_t* bridge = my_context->pulse->priv.w.bridge;
+    bridge_t* bridge = my_lib->w.bridge;
     uintptr_t b = 0;
     if(cb)
             b = AddCheckBridge(bridge, vFppp, cb, 0, NULL);
@@ -917,7 +1044,7 @@ static void* my_defer_new(void* api, void* cb, void* data)
     }
 
     // need to bridge the callback!
-    bridge_t* bridge = my_context->pulse->priv.w.bridge;
+    bridge_t* bridge = my_lib->w.bridge;
     if(cb) {
         b = CheckBridged(bridge, cb);
         if(!b)
@@ -951,7 +1078,7 @@ static void my_defer_set_destroy(void* e, void* cb)
     if(fnc)
         return ((vFpp_t)fnc)(e, cb);
 
-    bridge_t* bridge = my_context->pulse->priv.w.bridge;
+    bridge_t* bridge = my_lib->w.bridge;
     uintptr_t b = 0;
     if(cb)
         b = AddCheckBridge(bridge, vFppp, cb, 0, NULL);
@@ -1017,7 +1144,7 @@ EXPORT void my_pa_mainloop_free(x86emu_t* emu, void* mainloop)
 EXPORT void* my_pa_mainloop_get_api(x86emu_t* emu, void* mainloop)
 {
     my_pa_mainloop_api_t* api = my->pa_mainloop_get_api(mainloop);
-    bridgeMainloopAPI(my_lib->priv.w.bridge, api);
+    bridgeMainloopAPI(my_lib->w.bridge, api);
     return my_mainloop_ref;
 }
 
@@ -1030,7 +1157,7 @@ EXPORT void my_pa_threaded_mainloop_free(x86emu_t* emu, void* mainloop)
 EXPORT void* my_pa_threaded_mainloop_get_api(x86emu_t* emu, void* mainloop)
 {
     my_pa_mainloop_api_t* api = my->pa_threaded_mainloop_get_api(mainloop);
-    bridgeMainloopAPI(my_lib->priv.w.bridge, api);
+    bridgeMainloopAPI(my_lib->w.bridge, api);
     return my_mainloop_ref;
 }
 
@@ -1129,12 +1256,12 @@ EXPORT void* my_pa_context_get_sink_input_info_list(x86emu_t* emu, void* context
 
 EXPORT void* my_pa_context_get_sink_info_list(x86emu_t* emu, void* context, void* cb, void* data)
 {
-    return my->pa_context_get_sink_info_list(context, find_module_info_Fct(cb), data);
+    return my->pa_context_get_sink_info_list(context, find_sink_info_Fct(cb), data);
 }
 
 EXPORT void* my_pa_context_get_sink_info_by_name(x86emu_t* emu, void* context, void* name, void* cb, void* data)
 {
-    return my->pa_context_get_sink_info_by_name(context, name, find_module_info_Fct(cb), data);
+    return my->pa_context_get_sink_info_by_name(context, name, find_sink_info_Fct(cb), data);
 }
 
 EXPORT void* my_pa_context_get_source_info_list(x86emu_t* emu, void* context, void* cb, void* data)
@@ -1154,7 +1281,7 @@ EXPORT void my_pa_context_set_sink_input_volume(x86emu_t* emu, void* context, ui
 
 EXPORT void* my_pa_context_get_sink_info_by_index(x86emu_t* emu, void* context, uint32_t idx, void* cb, void* data)
 {
-    return my->pa_context_get_sink_info_by_index(context, idx, find_module_info_Fct(cb), data);
+    return my->pa_context_get_sink_info_by_index(context, idx, find_sink_info_Fct(cb), data);
 }
 
 EXPORT void* my_pa_context_get_source_info_by_index(x86emu_t* emu, void* context, uint32_t idx, void* cb, void* data)
@@ -1261,8 +1388,6 @@ EXPORT void my_pa_stream_set_read_callback(x86emu_t* emu, void* stream, void* cb
 
 EXPORT int my_pa_stream_write(x86emu_t* emu, void* stream, void* d, uint32_t nbytes, void* cb, int64_t offset, int seek)
 {
-    if(!emu->context->pulse)
-        return 0;
     if(!my)
         return 0;
     return my->pa_stream_write(stream, d, nbytes, findFreeFct(cb), offset, seek);
@@ -1480,11 +1605,9 @@ EXPORT void* my_pa_context_get_source_output_info(x86emu_t* emu, void* c, uint32
 
 #define CUSTOM_INIT     \
     getMy(lib);         \
-    box86->pulse = lib; \
 
 
 #define CUSTOM_FINI \
-    lib->context->pulse = NULL;     \
     freeMy();
 
 #include "wrappedlib_init.h"

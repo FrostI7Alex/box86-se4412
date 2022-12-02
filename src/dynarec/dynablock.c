@@ -20,6 +20,7 @@
 #include "dynablock_private.h"
 #include "dynarec_private.h"
 #include "elfloader.h"
+#include "bridge.h"
 #ifdef ARM
 #include "dynarec_arm.h"
 #include "arm_lock_helper.h"
@@ -46,11 +47,11 @@ dynablocklist_t* NewDynablockList(uintptr_t text, int textsz, int direct)
         printf_log(LOG_NONE, "Error, creating a NULL sized Dynablock\n");
         return NULL;
     }
-    dynablocklist_t* ret = (dynablocklist_t*)calloc(1, sizeof(dynablocklist_t));
+    dynablocklist_t* ret = (dynablocklist_t*)box_calloc(1, sizeof(dynablocklist_t));
     ret->text = text;
     ret->textsz = textsz;
     if(direct && textsz) {
-        ret->direct = (dynablock_t**)calloc(textsz, sizeof(dynablock_t*));
+        ret->direct = (dynablock_t**)box_calloc(textsz, sizeof(dynablock_t*));
         if(!ret->direct) {printf_log(LOG_NONE, "Warning, fail to create direct block for dynablock @%p\n", (void*)text);}
     }
     dynarec_log(LOG_DEBUG, "New Dynablocklist %p, from %p->%p\n", ret, (void*)text, (void*)(text+textsz));
@@ -86,10 +87,10 @@ void FreeDynablock(dynablock_t* db, int need_lock)
         if(!db->father) {
             dynarec_log(LOG_DEBUG, " -- FreeDyrecMap(%p, %d)\n", db->block, db->size);
             FreeDynarecMap(db, (uintptr_t)db->block, db->size);
-            free(db->sons);
-            free(db->instsize);
+            box_free(db->sons);
+            box_free(db->instsize);
         }
-        free(db);
+        box_free(db);
         if(need_lock)
             pthread_mutex_unlock(&my_context->mutex_dyndump);
     }
@@ -107,11 +108,11 @@ void FreeDynablockList(dynablocklist_t** dynablocks)
             if((*dynablocks)->direct[i] && !(*dynablocks)->direct[i]->father) 
                 FreeDynablock((*dynablocks)->direct[i], my_context?1:0);
         }
-        free((*dynablocks)->direct);
+        box_free((*dynablocks)->direct);
     }
     (*dynablocks)->direct = NULL;
 
-    free(*dynablocks);
+    box_free(*dynablocks);
     *dynablocks = NULL;
 }
 
@@ -177,6 +178,7 @@ void FreeRangeDynablock(dynablocklist_t* dynablocks, uintptr_t addr, uintptr_t s
         return;
 
     if(dynablocks->direct) {
+        int need_lock = my_context?1:0;
         dynablock_t* db;
         int ret;
         khint_t k;
@@ -206,7 +208,7 @@ void FreeRangeDynablock(dynablocklist_t* dynablocks, uintptr_t addr, uintptr_t s
         }
         // purge the list
         kh_foreach_value(blocks, db,
-            FreeDynablock(db, 1);
+            FreeDynablock(db, need_lock);
         );
         kh_destroy(dynablocks, blocks);
     }
@@ -275,21 +277,21 @@ dynablock_t *AddNewDynablock(dynablocklist_t* dynablocks, uintptr_t addr, int* c
     
     pthread_mutex_lock(&my_context->mutex_dyndump);
     if(!dynablocks->direct) {
-        dynablock_t** p = (dynablock_t**)calloc(dynablocks->textsz, sizeof(dynablock_t*));
+        dynablock_t** p = (dynablock_t**)box_calloc(dynablocks->textsz, sizeof(dynablock_t*));
         if(arm_lock_storeifnull(&dynablocks->direct, p)!=p)
-            free(p);    // someone already create the direct array, too late...
+            box_free(p);    // someone already create the direct array, too late...
     }
 
     // create and add new block
     dynarec_log(LOG_VERBOSE, "Ask for DynaRec Block creation @%p\n", (void*)addr);
 
-    block = (dynablock_t*)calloc(1, sizeof(dynablock_t));
+    block = (dynablock_t*)box_calloc(1, sizeof(dynablock_t));
     block->parent = dynablocks; 
     dynablock_t* tmp = (dynablock_t*)arm_lock_storeifnull(&dynablocks->direct[addr-dynablocks->text], block);
     pthread_mutex_unlock(&my_context->mutex_dyndump);
     if(tmp !=  block) {
         // a block appeard!
-        free(block);
+        box_free(block);
         *created = 0;
         return tmp;
     }
@@ -311,6 +313,8 @@ void cancelFillBlock()
 */
 static dynablock_t* internalDBGetBlock(x86emu_t* emu, uintptr_t addr, uintptr_t filladdr, int create, dynablock_t* current, int need_lock)
 {
+    if(hasAlternate((void*)addr))
+        return NULL;
     // try the quickest way first: get parent of current and check if ok!
     dynablocklist_t *dynablocks = NULL;
     dynablock_t* block = NULL;
@@ -358,7 +362,7 @@ static dynablock_t* internalDBGetBlock(x86emu_t* emu, uintptr_t addr, uintptr_t 
             dynarec_log(LOG_INFO, "Warning, a wild block appeared at %p: %p\n", (void*)addr, old);
             // Doing nothing else, the block has not been written
         }
-        free(block);
+        box_free(block);
         block = NULL;
     }
     // check size
@@ -392,6 +396,10 @@ dynablock_t* DBGetBlock(x86emu_t* emu, uintptr_t addr, int create, dynablock_t**
 {
     dynablock_t *db = internalDBGetBlock(emu, addr, addr, create, *current, 1);
     if(db && db->done && db->block && (db->need_test || (db->father && db->father->need_test))) {
+        if(AreaInHotPage((uintptr_t)db->x86_addr, (uintptr_t)db->x86_addr + db->x86_size - 1)) {
+            dynarec_log(LOG_DEBUG, "Not running block %p from %p:%p with for %p because it's in a hotpage\n", db, db->x86_addr, db->x86_addr+db->x86_size-1, (void*)addr);
+            return NULL;
+        }
         if(pthread_mutex_trylock(&my_context->mutex_dyndump))
             return NULL;
         dynablock_t *father = db->father?db->father:db;

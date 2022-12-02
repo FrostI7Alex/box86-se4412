@@ -584,7 +584,7 @@ GO(g_listenv, pFv)
 GO(g_list_find, pFpp)
 GOM(g_list_find_custom, pFEppp)
 GO(g_list_first, pFp)
-//GOM(g_list_foreach, vFEpBp)
+GOM(g_list_foreach, vFEppp)
 GO(g_list_free, vFp)
 GO(g_list_free_1, vFp)
 GOM(g_list_free_full, vFEpp)
@@ -1270,7 +1270,7 @@ GOM(g_thread_create_full, pFEppLiiip)
 //GO(g_thread_error_quark, 
 GO(g_thread_exit, vFp)
 GOM(g_thread_foreach, vFEpp)
-//GO(g_thread_get_initialized, 
+GO(g_thread_get_initialized, iFv)
 //GO(g_thread_init_glib, 
 GO(g_thread_join, pFp)
 //GO(g_thread_new, 

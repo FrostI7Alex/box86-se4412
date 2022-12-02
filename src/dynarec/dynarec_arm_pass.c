@@ -30,6 +30,7 @@ uintptr_t arm_pass(dynarec_arm_t* dyn, uintptr_t addr)
 {
     int ok = 1;
     int ninst = 0;
+    int j32;
     uintptr_t ip = addr;
     uintptr_t init_addr = addr;
     MAYUSE(init_addr);
@@ -118,7 +119,11 @@ uintptr_t arm_pass(dynarec_arm_t* dyn, uintptr_t addr)
         dyn->n.stack_push = 0;
         dyn->n.swapped = 0;
         NEW_INST;
+        if(dyn->insts[ninst].pred_sz>1) {SMSTART();}
         fpu_reset_scratch(dyn);
+        if((dyn->insts[ninst].x86.need_before&~X_PEND) && !dyn->insts[ninst].pred_sz) {
+            READFLAGS(dyn->insts[ninst].x86.need_before&~X_PEND);
+        }
 #ifdef HAVE_TRACE
         if(my_context->dec && box86_dynarec_trace) {
         if((trace_end == 0) 
@@ -178,6 +183,7 @@ uintptr_t arm_pass(dynarec_arm_t* dyn, uintptr_t addr)
                 uintptr_t next = get_closest_next(dyn, addr);
                 if(next && (
                     (((next-addr)<15) && is_nops(dyn, addr, next-addr)) 
+                    && (((box86_dynarec_bigblock<2) && isJumpTableDefault((void*)next)) || (box86_dynarec_bigblock>1))
                     /*||(((next-addr)<30) && is_instructions(dyn, addr, next-addr))*/ ))
                 {
                     ok = 1;
@@ -211,10 +217,7 @@ uintptr_t arm_pass(dynarec_arm_t* dyn, uintptr_t addr)
                 BARRIER(BARRIER_FLOAT);
             }
             #if STEP == 0
-            if(dyn->insts[ninst].x86.set_flags)
-                dyn->insts[ninst].x86.default_need |= X_PEND;
-            else
-                dyn->insts[ninst].x86.use_flags |= X_PEND;
+            dyn->insts[ninst].x86.need_after |= X_PEND;
             #endif
             ++ninst;
             fpu_purgecache(dyn, ninst, 0, x1, x2, x3);

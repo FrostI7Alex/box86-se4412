@@ -28,12 +28,12 @@ typedef struct dlprivate_s {
 } dlprivate_t;
 
 dlprivate_t *NewDLPrivate() {
-    dlprivate_t* dl =  (dlprivate_t*)calloc(1, sizeof(dlprivate_t));
+    dlprivate_t* dl =  (dlprivate_t*)box_calloc(1, sizeof(dlprivate_t));
     return dl;
 }
 void FreeDLPrivate(dlprivate_t **lib) {
-    free((*lib)->last_error);
-    free(*lib);
+    box_free((*lib)->last_error);
+    box_free(*lib);
 }
 
 void* my_dlopen(x86emu_t* emu, void *filename, int flag) EXPORT;
@@ -58,7 +58,7 @@ const char* libdlName =
 // define all standard library functions
 #include "wrappedlib_init.h"
 
-#define CLEARERR    if(dl->last_error) free(dl->last_error); dl->last_error = NULL;
+#define CLEARERR    if(dl->last_error) box_free(dl->last_error); dl->last_error = NULL;
 
 extern int box86_zoom;
 // Implementation
@@ -68,7 +68,7 @@ void* my_dlopen(x86emu_t* emu, void *filename, int flag)
     // TODO, handling special values for filename, like RTLD_SELF?
     // TODO, handling flags?
     library_t *lib = NULL;
-    dlprivate_t *dl = emu->context->dlprivate;
+    dlprivate_t *dl = my_context->dlprivate;
     int dlopened = 0;
     int is_local = (flag&0x100)?0:1;  // if not global, then local, and that means symbols are not put in the global "pot" for other libs
     CLEARERR
@@ -88,17 +88,17 @@ void* my_dlopen(x86emu_t* emu, void *filename, int flag)
         printf_dlsym(LOG_DEBUG, "BOX86: Call to dlopen(\"%s\"/%p, %X)\n", rfilename, filename, flag);
         // Transform any ${...} that maight be present
         while(strstr(rfilename, "${ORIGIN}")) {
-            char* origin = strdup(my_context->fullpath);
+            char* origin = box_strdup(my_context->fullpath);
             char* p = strrchr(origin, '/');
             if(p) *p = '\0';    // remove file name to have only full path, without last '/'
-            char* tmp = (char*)calloc(1, strlen(rfilename)-strlen("${ORIGIN}")+strlen(origin)+1);
+            char* tmp = (char*)box_calloc(1, strlen(rfilename)-strlen("${ORIGIN}")+strlen(origin)+1);
             p = strstr(rfilename, "${ORIGIN}");
             memcpy(tmp, rfilename, p-rfilename);
             strcat(tmp, origin);
             strcat(tmp, p+strlen("${ORIGIN}"));
             strcpy(rfilename, tmp);
-            free(tmp);
-            free(origin);
+            box_free(tmp);
+            box_free(origin);
         }
         // check if alread dlopenned...
         for (int i=0; i<dl->lib_sz; ++i) {
@@ -116,7 +116,7 @@ void* my_dlopen(x86emu_t* emu, void *filename, int flag)
                 }
                 if(!(flag&0x4))
                     dl->count[i] = dl->count[i]+1;
-                    printf_dlsym(LOG_DEBUG, "dlopen: Recycling %s/%p count=%d (dlopened=%d, elf_index=%d)\n", rfilename, (void*)(i+1), dl->count[i], dl->dlopened[i], GetElfIndex(dl->libs[i]));
+                printf_dlsym(LOG_DEBUG, "dlopen: Recycling %s/%p count=%d (dlopened=%d, elf_index=%d)\n", rfilename, (void*)(i+1), dl->count[i], dl->dlopened[i], GetElfIndex(dl->libs[i]));
                 return (void*)(i+1);
             }
         }
@@ -132,11 +132,11 @@ void* my_dlopen(x86emu_t* emu, void *filename, int flag)
         int old_missing = allow_missing_libs;
         if(flag&0x01)   // RTLD_LAZY
             allow_missing_libs = 1;
-        if(AddNeededLib(NULL, NULL, NULL, is_local, bindnow, libs, 1, emu->context, emu)) {
+        if(AddNeededLib(NULL, NULL, NULL, is_local, bindnow, libs, 1, my_context, emu)) {
             allow_missing_libs = old_missing;
             printf_dlsym(strchr(rfilename,'/')?LOG_DEBUG:LOG_INFO, "Warning: Cannot dlopen(\"%s\"/%p, %X)\n", rfilename, filename, flag);
             if(!dl->last_error)
-                dl->last_error = malloc(129);
+                dl->last_error = box_malloc(129);
             snprintf(dl->last_error, 129, "Cannot dlopen(\"%s\"/%p, %X)\n", rfilename, filename, flag);
             return NULL;
         }
@@ -157,9 +157,9 @@ void* my_dlopen(x86emu_t* emu, void *filename, int flag)
     
     if(dl->lib_sz == dl->lib_cap) {
         dl->lib_cap += 4;
-        dl->libs = (library_t**)realloc(dl->libs, sizeof(library_t*)*dl->lib_cap);
-        dl->count = (int*)realloc(dl->count, sizeof(int)*dl->lib_cap);
-        dl->dlopened = (int*)realloc(dl->dlopened, sizeof(int)*dl->lib_cap);
+        dl->libs = (library_t**)box_realloc(dl->libs, sizeof(library_t*)*dl->lib_cap);
+        dl->count = (int*)box_realloc(dl->count, sizeof(int)*dl->lib_cap);
+        dl->dlopened = (int*)box_realloc(dl->dlopened, sizeof(int)*dl->lib_cap);
         // memset count...
         memset(dl->count+dl->lib_sz, 0, (dl->lib_cap-dl->lib_sz)*sizeof(int));
     }
@@ -179,7 +179,7 @@ void* my_dlmopen(x86emu_t* emu, void* lmid, void *filename, int flag)
 }
 char* my_dlerror(x86emu_t* emu)
 {
-    dlprivate_t *dl = emu->context->dlprivate;
+    dlprivate_t *dl = my_context->dlprivate;
     return dl->last_error;
 }
 
@@ -194,8 +194,12 @@ int recursive_dlsym_lib(kh_libs_t* collection, library_t* lib, const char* rsymb
         return 0;
     int ret;
     kh_put(libs, collection, (uintptr_t)lib, &ret);
+    // TODO: should use librarian functions instead!
+    int weak;
     // look in the library itself
-    if(lib->get(lib, rsymbol, start, end, version, vername, 1))
+    if(lib->getglobal(lib, rsymbol, start, end, 0, &weak, version, vername, 1))
+        return 1;
+    if(lib->getweak(lib, rsymbol, start, end, 0, &weak, version, vername, 1))
         return 1;
     // look in other libs
     int n = GetNeededLibN(lib);
@@ -218,32 +222,32 @@ int my_dlsym_lib(library_t* lib, const char* rsymbol, uintptr_t *start, uintptr_
 }
 void* my_dlsym(x86emu_t* emu, void *handle, void *symbol)
 {
-    dlprivate_t *dl = emu->context->dlprivate;
-    uintptr_t start, end;
+    dlprivate_t *dl = my_context->dlprivate;
+    uintptr_t start = 0, end = 0;
     char* rsymbol = (char*)symbol;
     CLEARERR
     printf_dlsym(LOG_DEBUG, "Call to dlsym(%p, \"%s\")%s", handle, rsymbol, dlsym_error?"":"\n");
     if(handle==NULL) {
         // special case, look globably
-        if(GetGlobalSymbolStartEnd(emu->context->maplib, rsymbol, &start, &end, NULL, -1, NULL)) {
+        if(GetGlobalSymbolStartEnd(my_context->maplib, rsymbol, &start, &end, NULL, -1, NULL)) {
             printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
             return (void*)start;
         }
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Symbol \"%s\" not found in %p)\n", rsymbol, handle);
         printf_dlsym(LOG_NEVER, "%p\n", NULL);
         return NULL;
     }
     if(handle==(void*)0xFFFFFFFF) {
         // special case, look globably but no self (RTLD_NEXT)
-        elfheader_t *elf = FindElfAddress(emu->context, *(uint32_t*)R_ESP); // use return address to guess "self"
-        if(GetNoSelfSymbolStartEnd(emu->context->maplib, rsymbol, &start, &end, elf, -1, NULL)) {
+        elfheader_t *elf = FindElfAddress(my_context, *(uint32_t*)R_ESP); // use return address to guess "self"
+        if(GetNoSelfSymbolStartEnd(my_context->maplib, rsymbol, &start, &end, elf, 0, -1, NULL)) {
             printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
             return (void*)start;
         }
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Symbol \"%s\" not found in %p)\n", rsymbol, handle);
         printf_dlsym(LOG_NEVER, "%p\n", NULL);
         return NULL;
@@ -252,14 +256,14 @@ void* my_dlsym(x86emu_t* emu, void *handle, void *symbol)
     --nlib;
     if(nlib<0 || nlib>=dl->lib_sz) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p)\n", handle);
         printf_dlsym(LOG_NEVER, "%p\n", NULL);
         return NULL;
     }
     if(dl->count[nlib]==0) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p (already closed))\n", handle);
         printf_dlsym(LOG_NEVER, "%p\n", (void*)NULL);
         return NULL;
@@ -270,20 +274,14 @@ void* my_dlsym(x86emu_t* emu, void *handle, void *symbol)
             printf_dlsym(LOG_NEVER, "%p\nCall to dlsym(%s, \"%s\") Symbol not found\n", NULL, GetNameLib(dl->libs[nlib]), rsymbol);
             printf_log(LOG_DEBUG, " Symbol not found\n");
             if(!dl->last_error)
-                dl->last_error = malloc(129);
+                dl->last_error = box_malloc(129);
             snprintf(dl->last_error, 129, "Symbol \"%s\" not found in %p(%s)", rsymbol, handle, GetNameLib(dl->libs[nlib]));
             return NULL;
         }
     } else {
-        if(GetSymbolStartEnd(GetLocalSymbol(emu->context->maplib), rsymbol, &start, &end, -1, NULL, 0)) {
-            printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
-            return (void*)start;
-        }
-        if(GetSymbolStartEnd(GetWeakSymbol(emu->context->maplib), rsymbol, &start, &end, -1, NULL, 0)) {
-            printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
-            return (void*)start;
-        }
-        if(GetSymbolStartEnd(GetMapSymbol(emu->context->maplib), rsymbol, &start, &end, -1, NULL, 0)) {
+        const char* defver = GetDefaultVersion(my_context->globaldefver, rsymbol);
+        if(!defver) defver = GetDefaultVersion(my_context->weakdefver, rsymbol);
+        if(GetGlobalSymbolStartEnd(my_context->maplib, rsymbol, &start, &end, NULL, -1, defver)) {
             printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
             return (void*)start;
         }
@@ -291,7 +289,7 @@ void* my_dlsym(x86emu_t* emu, void *handle, void *symbol)
         printf_dlsym(LOG_NEVER, "%p\nCall to dlsym(%s, \"%s\") Symbol not found\n", NULL, "Self", rsymbol);
         printf_log(LOG_DEBUG, " Symbol not found\n");
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Symbol \"%s\" not found in %p)\n", rsymbol, handle);
         return NULL;
     }
@@ -301,20 +299,20 @@ void* my_dlsym(x86emu_t* emu, void *handle, void *symbol)
 int my_dlclose(x86emu_t* emu, void *handle)
 {
         printf_dlsym(LOG_DEBUG, "Call to dlclose(%p)\n", handle);
-    dlprivate_t *dl = emu->context->dlprivate;
+    dlprivate_t *dl = my_context->dlprivate;
     CLEARERR
     int nlib = (int)handle;
     --nlib;
     if(nlib<0 || nlib>=dl->lib_sz) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p)\n", handle);
         printf_dlsym(LOG_DEBUG, "dlclose: %s\n", dl->last_error);
         return -1;
     }
     if(dl->count[nlib]==0) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p (already closed))\n", handle);
         printf_dlsym(LOG_DEBUG, "dlclose: %s\n", dl->last_error);
         return -1;
@@ -324,7 +322,7 @@ int my_dlclose(x86emu_t* emu, void *handle)
         int idx = GetElfIndex(dl->libs[nlib]);
         if(idx!=-1) {
             printf_dlsym(LOG_DEBUG, "dlclose: Call to Fini for %p\n", handle);
-            RunElfFini(emu->context->elfs[idx], emu);
+            RunElfFini(my_context->elfs[idx], emu);
             InactiveLibrary(dl->libs[nlib]);
         }
     }
@@ -333,7 +331,7 @@ int my_dlclose(x86emu_t* emu, void *handle)
 int my_dladdr1(x86emu_t* emu, void *addr, void *i, void** extra_info, int flags)
 {
     //int dladdr(void *addr, Dl_info *info);
-    dlprivate_t *dl = emu->context->dlprivate;
+    dlprivate_t *dl = my_context->dlprivate;
     CLEARERR
     Dl_info *info = (Dl_info*)i;
     printf_log(LOG_DEBUG, "Warning: partially unimplement call to dladdr/dladdr1(%p, %p, %p, %d)\n", addr, info, extra_info, flags);
@@ -342,7 +340,7 @@ int my_dladdr1(x86emu_t* emu, void *addr, void *i, void** extra_info, int flags)
     library_t* lib = NULL;
     info->dli_saddr = NULL;
     info->dli_fname = NULL;
-    info->dli_sname = FindSymbolName(emu->context->maplib, addr, &info->dli_saddr, NULL, &info->dli_fname, &info->dli_fbase, &lib);
+    info->dli_sname = FindSymbolName(my_context->maplib, addr, &info->dli_saddr, NULL, &info->dli_fname, &info->dli_fbase, &lib);
     #ifndef RTLD_DL_SYMENT
     #define RTLD_DL_SYMENT 1
     #endif
@@ -364,33 +362,33 @@ int my_dladdr(x86emu_t* emu, void *addr, void *i)
 }
 void* my_dlvsym(x86emu_t* emu, void *handle, void *symbol, const char* vername)
 {
-    dlprivate_t *dl = emu->context->dlprivate;
+    dlprivate_t *dl = my_context->dlprivate;
     int version = (vername)?2:-1;
     uintptr_t start, end;
     char* rsymbol = (char*)symbol;
     CLEARERR
-    printf_dlsym(LOG_DEBUG, "Call to dlvsym(%p, \"%s\", %s)%s", handle, rsymbol, vername?vername:"(nil)", dlsym_error?"":"\n");
+    printf_dlsym(LOG_DEBUG, "Call to dlvsym(%p, \"%s\", %s)%s", handle, rsymbol, vername?vername:"(nil)", dlsym_error?" => ":"\n");
     if(handle==NULL) {
         // special case, look globably
-        if(GetGlobalSymbolStartEnd(emu->context->maplib, rsymbol, &start, &end, NULL, version, vername)) {
+        if(GetGlobalSymbolStartEnd(my_context->maplib, rsymbol, &start, &end, NULL, version, vername)) {
             printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
             return (void*)start;
         }
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Symbol \"%s\" version %s not found in %p)\n", rsymbol, vername?vername:"(nil)", handle);
         printf_dlsym(LOG_NEVER, "%p\n", NULL);
         return NULL;
     }
     if(handle==(void*)0xFFFFFFFF) {
         // special case, look globably but no self (RTLD_NEXT)
-        elfheader_t *elf = FindElfAddress(emu->context, *(uint32_t*)R_ESP); // use return address to guess "self"
-        if(GetNoSelfSymbolStartEnd(emu->context->maplib, rsymbol, &start, &end, elf, version, vername)) {
+        elfheader_t *elf = FindElfAddress(my_context, *(uint32_t*)R_ESP); // use return address to guess "self"
+        if(GetNoSelfSymbolStartEnd(my_context->maplib, rsymbol, &start, &end, elf, 0, version, vername)) {
             printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
             return (void*)start;
         }
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Symbol \"%s\" version %s not found in %p)\n", rsymbol, vername?vername:"(nil)", handle);
         printf_dlsym(LOG_NEVER, "%p\n", NULL);
         return NULL;
@@ -399,14 +397,14 @@ void* my_dlvsym(x86emu_t* emu, void *handle, void *symbol, const char* vername)
     --nlib;
     if(nlib<0 || nlib>=dl->lib_sz) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p)\n", handle);
         printf_dlsym(LOG_NEVER, "%p\n", NULL);
         return NULL;
     }
     if(dl->count[nlib]==0) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p (already closed))\n", handle);
         printf_dlsym(LOG_NEVER, "%p\n", (void*)NULL);
         return NULL;
@@ -416,28 +414,22 @@ void* my_dlvsym(x86emu_t* emu, void *handle, void *symbol, const char* vername)
             // not found
             printf_dlsym(LOG_NEVER, "%p\nCall to dlvsym(%s, \"%s\", %s) Symbol not found\n", NULL, GetNameLib(dl->libs[nlib]), rsymbol, vername?vername:"(nil)");
             if(!dl->last_error)
-                dl->last_error = malloc(129);
+                dl->last_error = box_malloc(129);
             snprintf(dl->last_error, 129, "Symbol \"%s\" not found in %p(%s)", rsymbol, handle, GetNameLib(dl->libs[nlib]));
             return NULL;
         }
     } else {
         // still usefull?
-        if(GetSymbolStartEnd(GetLocalSymbol(emu->context->maplib), rsymbol, &start, &end, version, vername, 1)) {
-            printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
-            return (void*)start;
-        }
-        if(GetSymbolStartEnd(GetWeakSymbol(emu->context->maplib), rsymbol, &start, &end, version, vername, 1)) {
-            printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
-            return (void*)start;
-        }
-        if(GetSymbolStartEnd(GetMapSymbol(emu->context->maplib), rsymbol, &start, &end, version, vername, 1)) {
+        const char* defver = GetDefaultVersion(my_context->globaldefver, rsymbol);
+        if(!defver) defver = GetDefaultVersion(my_context->weakdefver, rsymbol);
+        if(GetGlobalSymbolStartEnd(my_context->maplib, rsymbol, &start, &end, NULL, -1, defver)) {
             printf_dlsym(LOG_NEVER, "%p\n", (void*)start);
             return (void*)start;
         }
         // not found
         printf_dlsym(LOG_NEVER, "%p\nCall to dlvsym(%s, \"%s\", %s) Symbol not found\n", NULL, "Self", rsymbol, vername?vername:"(nil)");
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Symbol \"%s\" version %s not found in %p)\n", rsymbol, vername?vername:"(nil)", handle);
         return NULL;
     }
@@ -454,20 +446,20 @@ typedef struct link_map_s {
 int my_dlinfo(x86emu_t* emu, void* handle, int request, void* info)
 {
         printf_dlsym(LOG_DEBUG, "Call to dlinfo(%p, %d, %p)\n", handle, request, info);
-    dlprivate_t *dl = emu->context->dlprivate;
+    dlprivate_t *dl = my_context->dlprivate;
     CLEARERR
     int nlib = (int)handle;
     --nlib;
     if(nlib<0 || nlib>=dl->lib_sz) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p)\n", handle);
         printf_dlsym(LOG_DEBUG, "dlinfo: %s\n", dl->last_error);
         return -1;
     }
     if(dl->count[nlib]==0) {
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "Bad handle %p (already closed))\n", handle);
         printf_dlsym(LOG_DEBUG, "dlinfo: %s\n", dl->last_error);
         return -1;
@@ -487,7 +479,7 @@ int my_dlinfo(x86emu_t* emu, void* handle, int request, void* info)
         default:
             printf_log(LOG_NONE, "Warning, unsupported call to dlinfo(%p, %d, %p)\n", handle, request, info);
         if(!dl->last_error)
-            dl->last_error = malloc(129);
+            dl->last_error = box_malloc(129);
         snprintf(dl->last_error, 129, "unsupported call to dlinfo request:%d\n", request);
     }
     return -1;

@@ -46,7 +46,7 @@ char* ResolveFile(const char* filename, path_collection_t* paths)
 {
     char p[MAX_PATH];
     if(filename[0]=='/')
-        return strdup(filename);
+        return box_strdup(filename);
     for (int i=0; i<paths->size; ++i) {
         if(paths->paths[i][0]!='/') {
             // not an absolute path...
@@ -58,10 +58,10 @@ char* ResolveFile(const char* filename, path_collection_t* paths)
             strcpy(p, paths->paths[i]);
         strcat(p, filename);
         if(FileExist(p, IS_FILE))
-            return realpath(p, NULL);
+            return box_realpath(p, NULL);
     }
 
-    return strdup(filename);//NULL; // not found, still return the name instead of null?
+    return box_strdup(filename);//NULL; // not found, still return the name instead of null?
 }
 
 int FileIsX64ELF(const char* filename)
@@ -108,13 +108,13 @@ int FileIsShell(const char* filename)
     fclose(f);
     if(sz!=1)
         return 0;
-    head[strlen(bashsign2)+1] = 0;
+    head[strlen(bashsign2)] = 0;
     if(!strcmp(head, bashsign2))
         return 1;
-    head[strlen(bashsign)+1] = 0;
+    head[strlen(bashsign)] = 0;
     if(!strcmp(head, bashsign))
         return 1;
-    head[strlen(shsign)+1] = 0;
+    head[strlen(shsign)] = 0;
     if(!strcmp(head, shsign))
         return 1;
     return 0;
@@ -130,6 +130,19 @@ const char* GetTmpDir() {
     if(FileExist("/usr/tmp", 0))              return "/usr/tmp";
 
     return "/tmp";  // meh...
+}
+
+char* LowerCase(const char* s) {
+    if(!s)
+        return NULL;
+    char* ret = box_calloc(1, strlen(s)+1);
+    size_t i=0;
+    while(*s) {
+        ret[i++] = (*s>='A' && *s<='Z')?(*s-'A'+'a'):(*s);
+        ++s;
+    }
+
+    return ret;
 }
 
 #if defined(RPI) || defined(RK3399) || defined(GOA_CLONE)

@@ -21,15 +21,12 @@ dlprivate_t *NewDLPrivate();
 void FreeDLPrivate(dlprivate_t **lib);
 
 box86context_t* GetLibrarianContext(lib_t* maplib);
-kh_mapsymbols_t* GetMapSymbol(lib_t* maplib);
-kh_mapsymbols_t* GetWeakSymbol(lib_t* maplib);
-kh_mapsymbols_t* GetLocalSymbol(lib_t* maplib);
 kh_mapsymbols_t* GetGlobalData(lib_t* maplib);
 int AddNeededLib(lib_t* maplib, needed_libs_t* neededlibs, library_t* deplib, int local, int bindnow, const char** paths, int npath, box86context_t* box86, x86emu_t* emu); // 0=success, 1=error
 library_t* GetLibMapLib(lib_t* maplib, const char* name);
 library_t* GetLibInternal(const char* name);
 uintptr_t FindGlobalSymbol(lib_t *maplib, const char* name, int version, const char* vername);
-int GetNoSelfSymbolStartEnd(lib_t *maplib, const char* name, uintptr_t* start, uintptr_t* end, elfheader_t* self, int version, const char* vername);
+int GetNoSelfSymbolStartEnd(lib_t *maplib, const char* name, uintptr_t* start, uintptr_t* end, elfheader_t* self, size_t size, int version, const char* vername);
 int GetGlobalSymbolStartEnd(lib_t *maplib, const char* name, uintptr_t* start, uintptr_t* end, elfheader_t *self, int version, const char* vername);
 int GetGlobalNoWeakSymbolStartEnd(lib_t *maplib, const char* name, uintptr_t* start, uintptr_t* end, int version, const char* vername);
 int GetLocalSymbolStartEnd(lib_t *maplib, const char* name, uintptr_t* start, uintptr_t* end, elfheader_t *self, int version, const char* vername);

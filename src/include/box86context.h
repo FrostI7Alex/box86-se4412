@@ -40,7 +40,6 @@ typedef void* (*procaddess_t)(const char* name);
 typedef void* (*vkprocaddess_t)(void* instance, const char* name);
 
 #define MAX_SIGNAL 64
-#define CYCLE_LOG  16
 
 typedef struct tlsdatasize_s {
     int         tlssize;
@@ -102,6 +101,9 @@ typedef struct box86context_s {
 
     uintptr_t           ep;             // entry point
 
+    void*               brk;            // current brk (should be the end of bss segment of main elf)
+    int                 brksz;          // current added sz for brk
+
     lib_t               *maplib;        // lib and symbols handling
     lib_t               *local_maplib;  // libs and symbols openned has local (only collection of libs, no symbols)
     dic_t               *versym;        // dictionnary of versionned symbols
@@ -117,7 +119,8 @@ typedef struct box86context_s {
     kh_symbolmap_t      *almymap;       // link to the mysymbolmap if libOpenAL
     kh_symbolmap_t      *vkwrappers;    // the map of wrapper for VulkanProcs (TODO: check SDL2)
     kh_symbolmap_t      *vkmymap;       // link to the mysymbolmap of libGL
-    kh_defaultversion_t *defver;        // the default version for symbols (the XXX@@vvvv of symbols)
+    kh_defaultversion_t *globaldefver;  // the global default version for symbols (the XXX@@vvvv of symbols)
+    kh_defaultversion_t *weakdefver;    // the weak default version for symbols (the XXX@@vvvv of symbols)
     vkprocaddess_t      vkprocaddress;
 
     pthread_mutex_t     mutex_once;
@@ -134,22 +137,16 @@ typedef struct box86context_s {
     pthread_mutex_t     mutex_bridge;
 
     library_t           *libclib;       // shortcut to libc library (if loaded, so probably yes)
-    library_t           *sdl1lib;       // shortcut to SDL1 library (if loaded)
-    void*               sdl1allocrw;
-    void*               sdl1freerw;
     library_t           *sdl1mixerlib;
     library_t           *sdl2lib;       // shortcut to SDL2 library (if loaded)
-    void*               sdl2allocrw;
-    void*               sdl2freerw;
     library_t           *sdl2mixerlib;
-    library_t           *x11lib;
-    library_t           *zlib;
-    library_t           *vorbisfile;
-    library_t           *vorbis;
-    library_t           *asound;
-    library_t           *pulse;
-    library_t           *d3dadapter9;
+
     linkmap_t           *linkmap;
+
+    void*               sdl1allocrw;    // AllocRW/FreeRW functions from SDL1
+    void*               sdl1freerw;
+    void*               sdl2allocrw;    // AllocRW/FreeRW functions from SDL2
+    void*               sdl2freerw;
 
     int                 deferedInit;
     elfheader_t         **deferedInitList;
@@ -190,8 +187,8 @@ typedef struct box86context_s {
     int                 stack_clone_used;
 
     // rolling logs
-    char*               log_call[CYCLE_LOG];
-    char*               log_ret[CYCLE_LOG];
+    char*               *log_call;
+    char*               *log_ret;
     int                 current_line;
 } box86context_t;
 
@@ -199,6 +196,11 @@ extern box86context_t *my_context; // global context
 
 box86context_t *NewBox86Context(int argc);
 void FreeBox86Context(box86context_t** context);
+
+// Cycle log handling
+void freeCycleLog(box86context_t* ctx);
+void initCycleLog(box86context_t* context);
+void print_cycle_log(int loglevel);
 
 // return the index of the added header
 int AddElfHeader(box86context_t* ctx, elfheader_t* head);

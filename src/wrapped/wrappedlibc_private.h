@@ -612,7 +612,7 @@ GOW(getutline, pFp)
 GOW(getutline_r, iFppp)
 // getutmp
 // getutmpx
-// getutxent
+GO(getutxent, pFv)
 // getutxid
 // getutxline
 // getw
@@ -1080,7 +1080,7 @@ GOM(__lxstat, iFEipp)       //%%
 GOM(__lxstat64, iFEipp)     //%%
 GO(madvise, iFpLi)
 GOM(makecontext, iFEppiV)   //%%
-GOW(mallinfo, pFv)
+GOWS(mallinfo, pFEp)        //%%
 #ifdef NOALIGN
 GO(malloc, pFL)
 #else
@@ -1562,7 +1562,7 @@ GOW(settimeofday, iFpp)
 GOW(setuid, iFu)
 // setusershell
 GOW(setutent, vFv)
-// setutxent
+GO(setutxent, vFv)
 GOW(setvbuf, iFppiL)
 GO(setxattr, iFpppui)
 // sgetspent
@@ -1604,6 +1604,7 @@ GOW(sigprocmask, iFipp)
 // sigrelse
 // sigreturn    // Weak
 GOM(sigset, pFEip) //%%
+GOM(sigsetjmp, iFEp) //%%
 GOM(__sigsetjmp, iFEp) //%%
 GOW(sigsetmask, iFi)
 // sigstack
@@ -2251,6 +2252,7 @@ GOM(fstatat64, iFippi)  //%%,noE
 GOM(fstat64, iFip)  //%%,noE
 
 GOWM(_Unwind_Find_FDE, pFEpp)    // this is a libgcc_s function, I think. Create a dummy weak one, just in case
+GO(dummy__ZnwmSt11align_val_tRKSt9nothrow_t, pFLLp) // for mallochook.c
 
 #ifdef ANDROID
 GOM(__libc_init, vFEpppp)

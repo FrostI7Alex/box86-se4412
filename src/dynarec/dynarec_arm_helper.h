@@ -27,6 +27,30 @@
 #define PKip(a) *(uint8_t*)(ip+a)
 #define PKa(a)  *(uint8_t*)(a)
 
+// Strong mem emulation helpers
+// Sequence of Read will trigger a DMB on "first" read if strongmem is 2
+// Squence of Write will trigger a DMB on "last" write if strongmem is 1
+// Opcode will read
+#define SMREAD()    if(!dyn->smread && box86_dynarec_strongmem>1) {DMB_ISH(); dyn->smread=1;}
+// Opcode will read with option forced lock
+#define SMREADLOCK(lock)    if(lock) {SMDMB();} else if(!dyn->smread && box86_dynarec_strongmem>1) {DMB_ISH(); dyn->smread=1;}
+// Opcode migh read (depend on nextop)
+#define SMMIGHTREAD()   if(!MODREG) {SMREAD();}
+// Opcode has wrote
+#define SMWRITE()   dyn->smwrite=1
+// Opcode has wrote (strongmem>1 only)
+#define SMWRITE2()   if(box86_dynarec_strongmem>1) dyn->smwrite=1
+// Opcode has wrote with option forced lock
+#define SMWRITELOCK(lock)   if(lock) {SMDMB();} else dyn->smwrite=1
+// Opcode migh have wrote (depend on nextop)
+#define SMMIGHTWRITE()   if(!MODREG) {SMWRITE();}
+// Start of sequence
+#define SMSTART()   SMEND()
+// End of sequence
+#define SMEND()     if(dyn->smwrite && box86_dynarec_strongmem) {DMB_ISH();} dyn->smwrite=0; dyn->smread=0;
+// Force a Data memory barrier (for LOCK: prefix)
+#define SMDMB()     DMB_ISH(); if(dyn->smwrite) dyn->smwrite=0; dyn->smread=1
+
 //LOCK_* define
 #define LOCK_LOCK   (int*)1
 
@@ -37,6 +61,7 @@
                     ed = xEAX+(nextop&7);   \
                     wback = 0;              \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x2, &fixedaddress, 4095, 0, 0, NULL); \
                     LDR_IMM9(x1, wback, fixedaddress); \
                     ed = x1;                \
@@ -46,6 +71,7 @@
                     ed = xEAX+(nextop&7);   \
                     wback = 0;              \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, (hint==x2)?x1:x2, &fixedaddress, 4095, 0, 0, NULL); \
                     LDR_IMM9(hint, wback, fixedaddress); \
                     ed = hint;              \
@@ -56,19 +82,23 @@
                     MOV_REG(ret, ed);       \
                     wback = 0;              \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, hint, &fixedaddress, 4095, 0, 0, NULL); \
                     ed = ret;               \
                     LDR_IMM9(ed, wback, fixedaddress); \
                 }
 // Write back ed in wback (if wback not 0)
-#define WBACK       if(wback) {STR_IMM9(ed, wback, fixedaddress);}
+#define WBACK       if(wback) {STR_IMM9(ed, wback, fixedaddress); SMWRITE();}
+// Write back ed in wback (if wback not 0) (SMWRITE2 version)
+#define WBACK2      if(wback) {STR_IMM9(ed, wback, fixedaddress); SMWRITE2();}
 // Send back wb to either ed or wback
-#define SBACK(wb)   if(wback) {STR_IMM9(wb, wback, fixedaddress);} else {MOV_REG(ed, wb);}
+#define SBACK(wb)   if(wback) {STR_IMM9(wb, wback, fixedaddress); SMWRITE();} else {MOV_REG(ed, wb);}
 //GETEDO can use r1 for ed, and r2 for wback. wback is 0 if ed is xEAX..xEDI
 #define GETEDO(O)   if((nextop&0xC0)==0xC0) {   \
                     ed = xEAX+(nextop&7);   \
                     wback = 0;              \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x2, &fixedaddress, 0, 0, 0, NULL); \
                     LDR_REG_LSL_IMM5(x1, wback, O, 0);  \
                     ed = x1;                 \
@@ -78,13 +108,14 @@
                     ed = xEAX+(nextop&7);               \
                     wback = 0;                          \
                 } else {                                \
+                    SMREAD();                           \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x2, &fixedaddress, 0, 0, 0, NULL); \
                     ADD_REG_LSL_IMM5(x2, wback, O, 0);  \
                     if(wback != x2) wback = x2;         \
                     LDR_IMM9(x1, wback, 0);             \
                     ed = x1;                            \
                 }
-#define WBACKO(O)   if(wback) {STR_REG_LSL_IMM5(ed, wback, O, 0);}
+#define WBACKO(O)   if(wback) {STR_REG_LSL_IMM5(ed, wback, O, 0); SMWRITE();}
 //FAKEELike GETED, but doesn't get anything
 #define FAKEED  if((nextop&0xC0)!=0xC0) {   \
                     addr = fakeed(dyn, addr, ninst, nextop); \
@@ -98,6 +129,7 @@
                     ed = i;                 \
                     wb1 = 0;                \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, w, &fixedaddress, 255, 0, 0, NULL); \
                     LDRH_IMM8(i, wback, fixedaddress); \
                     ed = i;                 \
@@ -110,6 +142,7 @@
                     ed = i;                 \
                     wb1 = 0;                \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 255, 0, 0, NULL); \
                     LDRH_IMM8(i, wback, fixedaddress); \
                     ed = i;                 \
@@ -122,15 +155,16 @@
                     ed = i;                 \
                     wb1 = 0;                \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 255, 0, 0, NULL); \
                     LDRSH_IMM8(i, wback, fixedaddress);\
                     ed = i;                 \
                     wb1 = 1;                \
                 }
 // Write ed back to original register / memory
-#define EWBACK   if(wb1) {STRH_IMM8(ed, wback, fixedaddress);} else {BFI(wback, ed, 0, 16);}
+#define EWBACK   if(wb1) {STRH_IMM8(ed, wback, fixedaddress); SMWRITE();} else {BFI(wback, ed, 0, 16);}
 // Write w back to original register / memory
-#define EWBACKW(w)   if(wb1) {STRH_IMM8(w, wback, fixedaddress);} else {BFI(wback, w, 0, 16);}
+#define EWBACKW(w)   if(wb1) {STRH_IMM8(w, wback, fixedaddress); SMWRITE();} else {BFI(wback, w, 0, 16);}
 // Write back gd in correct register
 #define GWBACK       BFI((xEAX+((nextop&0x38)>>3)), gd, 0, 16);
 //GETEB will use i for ed, and can use r3 for wback.
@@ -142,6 +176,7 @@
                     wb1 = 0;                \
                     ed = i;                 \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 4095, 0, 0, NULL); \
                     LDRB_IMM9(i, wback, fixedaddress); \
                     wb1 = 1;                \
@@ -156,6 +191,7 @@
                     wb1 = 0;                \
                     ed = i;                 \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 0, 0, 0, NULL); \
                     ADD_REG_LSL_IMM5(x3, wback, i, 0);  \
                     if(wback!=x3) wback = x3;           \
@@ -172,13 +208,16 @@
                     wb1 = 0;                \
                     ed = i;                 \
                 } else {                    \
+                    SMREAD();               \
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 255, 0, 0, NULL); \
                     LDRSB_IMM8(i, wback, fixedaddress);\
                     wb1 = 1;                \
                     ed = i;                 \
                 }
 // Write eb (ed) back to original register / memory
-#define EBBACK   if(wb1) {STRB_IMM9(ed, wback, fixedaddress);} else {BFI(wback, ed, wb2*8, 8);}
+#define EBBACK   if(wb1) {STRB_IMM9(ed, wback, fixedaddress); SMWRITE();} else {BFI(wback, ed, wb2*8, 8);}
+// Write eb (ed) back to original register / memory (SMWRITE2 version)
+#define EBBACK2   if(wb1) {STRB_IMM9(ed, wback, fixedaddress); SMWRITE2();} else {BFI(wback, ed, wb2*8, 8);}
 //GETGB will use i for gd
 #define GETGB(i)    gd = (nextop&0x38)>>3;  \
                     gb2 = ((gd&4)>>2);      \
@@ -261,11 +300,11 @@
     j32 = GETMARKLOCK-(dyn->arm_size+8);   \
     Bcond(cond, j32)
 
-#define IFX(A)  if((dyn->insts[ninst].x86.need_flags&(A)))
-#define IFX_PENDOR0  if((dyn->insts[ninst].x86.need_flags&(X_PEND) || !dyn->insts[ninst].x86.need_flags))
-#define IFXX(A) if((dyn->insts[ninst].x86.need_flags==(A)))
-#define IFX2X(A, B) if((dyn->insts[ninst].x86.need_flags==(A) || dyn->insts[ninst].x86.need_flags==(B) || dyn->insts[ninst].x86.need_flags==((A)|(B))))
-#define IFXN(A, B)  if((dyn->insts[ninst].x86.need_flags&(A) && !(dyn->insts[ninst].x86.need_flags&(B))))
+#define IFX(A)  if((dyn->insts[ninst].x86.gen_flags&(A)))
+#define IFX_PENDOR0  if((dyn->insts[ninst].x86.gen_flags&(X_PEND) || !dyn->insts[ninst].x86.gen_flags))
+#define IFXX(A) if((dyn->insts[ninst].x86.gen_flags==(A)))
+#define IFX2X(A, B) if((dyn->insts[ninst].x86.gen_flags==(A) || dyn->insts[ninst].x86.gen_flags==(B) || dyn->insts[ninst].x86.gen_flags==((A)|(B))))
+#define IFXN(A, B)  if((dyn->insts[ninst].x86.gen_flags&(A) && !(dyn->insts[ninst].x86.gen_flags&(B))))
 
 // Generate FCOM with s1 and s2 scratch regs (the VCMP is already done)
 #define FCOM(s1, s2)    \
@@ -300,6 +339,10 @@
 #define SET_NODF()          dyn->f.dfnone = 0
 #define SET_DFOK()          dyn->f.dfnone = 1
 
+#ifndef MAYSETFLAGS
+#define MAYSETFLAGS()
+#endif
+
 #ifndef READFLAGS
 #define READFLAGS(A) \
     if((dyn->f.pending!=SF_SET)                         \
@@ -316,23 +359,21 @@
         SET_DFOK();                                     \
     }
 #endif
-// SF_MAYSET doesn't change the flags status cache
-// it also doesn't consume any needed flags
+
 #ifndef SETFLAGS
 #define SETFLAGS(A, B)                                                                          \
     if(dyn->f.pending!=SF_SET                                                                   \
     && ((B)&SF_SUB)                                                                             \
-    && (dyn->insts[ninst].x86.need_flags&(~(A))))                                               \
-        READFLAGS(((dyn->insts[ninst].x86.need_flags&X_PEND)?X_ALL:dyn->insts[ninst].x86.need_flags)&(~(A)));\
-    if(dyn->insts[ninst].x86.need_flags) switch(B) {                                            \
+    && (dyn->insts[ninst].x86.gen_flags&(~(A))))                                               \
+        READFLAGS(((dyn->insts[ninst].x86.gen_flags&X_PEND)?X_ALL:dyn->insts[ninst].x86.gen_flags)&(~(A)));\
+    if(dyn->insts[ninst].x86.gen_flags) switch(B) {                                            \
         case SF_SUBSET:                                                                         \
         case SF_SET: dyn->f.pending = SF_SET; break;                                            \
         case SF_PENDING: dyn->f.pending = SF_PENDING; break;                                    \
         case SF_SUBSET_PENDING:                                                                 \
         case SF_SET_PENDING:                                                                    \
-            dyn->f.pending = (dyn->insts[ninst].x86.need_flags&X_PEND)?SF_SET_PENDING:SF_SET;   \
+            dyn->f.pending = (dyn->insts[ninst].x86.gen_flags&X_PEND)?SF_SET_PENDING:SF_SET;   \
             break;                                                                              \
-        case SF_MAYSET: break;                                                                  \
     } else dyn->f.pending = SF_SET
 #endif
 #ifndef JUMP
@@ -344,12 +385,12 @@
 #ifndef BARRIER_NEXT
 #define BARRIER_NEXT(A)
 #endif
-#define UFLAG_OP1(A) if(dyn->insts[ninst].x86.need_flags) {STR_IMM9(A, xEmu, offsetof(x86emu_t, op1));}
-#define UFLAG_OP2(A) if(dyn->insts[ninst].x86.need_flags) {STR_IMM9(A, xEmu, offsetof(x86emu_t, op2));}
-#define UFLAG_OP12(A1, A2) if(dyn->insts[ninst].x86.need_flags) {STR_IMM9(A1, xEmu, offsetof(x86emu_t, op1));STR_IMM9(A2, 0, offsetof(x86emu_t, op2));}
-#define UFLAG_RES(A) if(dyn->insts[ninst].x86.need_flags) {STR_IMM9(A, xEmu, offsetof(x86emu_t, res));}
-#define UFLAG_DF(r, A) if(dyn->insts[ninst].x86.need_flags) {SET_DF(r, A)}
-#define UFLAG_IF if(dyn->insts[ninst].x86.need_flags)
+#define UFLAG_OP1(A) if(dyn->insts[ninst].x86.gen_flags) {STR_IMM9(A, xEmu, offsetof(x86emu_t, op1));}
+#define UFLAG_OP2(A) if(dyn->insts[ninst].x86.gen_flags) {STR_IMM9(A, xEmu, offsetof(x86emu_t, op2));}
+#define UFLAG_OP12(A1, A2) if(dyn->insts[ninst].x86.gen_flags) {STR_IMM9(A1, xEmu, offsetof(x86emu_t, op1));STR_IMM9(A2, 0, offsetof(x86emu_t, op2));}
+#define UFLAG_RES(A) if(dyn->insts[ninst].x86.gen_flags) {STR_IMM9(A, xEmu, offsetof(x86emu_t, res));}
+#define UFLAG_DF(r, A) if(dyn->insts[ninst].x86.gen_flags) {SET_DF(r, A)}
+#define UFLAG_IF if(dyn->insts[ninst].x86.gen_flags)
 #ifndef DEFAULT
 #define DEFAULT      *ok = -1; BARRIER(BARRIER_NOFLAGS)
 #endif
@@ -518,7 +559,7 @@ void* arm_next(x86emu_t* emu, uintptr_t addr);
 // put back (if needed) the single reg in place
 #define fpu_putback_single_reg  STEPNAME(fpu_putback_single_reg)
 
-#define fpuCacheTransform       STEPNAME(fpuCacheTransform)
+#define CacheTransform       STEPNAME(CacheTransform)
 
 /* setup r2 to address pointed by */
 uintptr_t geted(dynarec_arm_t* dyn, uintptr_t addr, int ninst, uint8_t nextop, uint8_t* ed, uint8_t hint, int* fixedaddress, uint32_t absmax, uint32_t mask, int getfixonly, int* l);
@@ -649,12 +690,12 @@ void x87_swapreg(dynarec_arm_t* dyn, int ninst, int s1, int s2, int a, int b);
 // Set rounding according to mxcsr flags, return reg to restore flags
 int sse_setround(dynarec_arm_t* dyn, int ninst, int s1, int s2, int s3);
 
-void fpuCacheTransform(dynarec_arm_t* dyn, int ninst, int s1, int s2, int s3);
+void CacheTransform(dynarec_arm_t* dyn, int ninst, int cacheupd, int s1, int s2, int s3);
 
 #if STEP < 2
 #define CHECK_CACHE()   0
 #else
-#define CHECK_CACHE()   fpuCacheNeedsTransform(dyn, ninst)
+#define CHECK_CACHE()   (cacheupd = CacheNeedsTransform(dyn, ninst))
 #endif
 
 #define neoncache_st_coherency STEPNAME(neoncache_st_coherency)

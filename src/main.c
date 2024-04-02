@@ -51,29 +51,48 @@ int box86_dynarec_log = LOG_NONE;
 uintptr_t box86_pagesize;
 uintptr_t box86_load_addr = 0;
 int box86_showbt = 0;
+int box86_isglibc234 = 0;
+int box86_nosandbox = 0;
+int box86_malloc_hack = 0;
+int box86_mutex_aligned = 0;
+int box86_quit = 0;
+int box86_exit_code = 0;
 #ifdef DYNAREC
 int box86_dynarec = 1;
 int box86_dynarec_dump = 0;
 int box86_dynarec_forced = 0;
 int box86_dynarec_largest = 0;
 int box86_dynarec_bigblock = 1;
+int box86_dynarec_forward = 128;
 int box86_dynarec_strongmem = 0;
 int box86_dynarec_x87double = 0;
 int box86_dynarec_fastnan = 1;
+int box86_dynarec_fastround = 1;
 int box86_dynarec_safeflags = 1;
+int box86_dynarec_callret = 0;
 int box86_dynarec_hotpage = 16;
 int box86_dynarec_bleeding_edge = 1;
+int box86_dynarec_jvm = 1;
+int box86_dynarec_tbb = 1;
+int box86_dynarec_wait = 1;
+int box86_dynarec_fastpage = 0;
 uintptr_t box86_nodynarec_start = 0;
 uintptr_t box86_nodynarec_end = 0;
+int box86_dynarec_test = 0;
+int box86_dynarec_missing = 0;
 #ifdef ARM
 int arm_vfp = 0;     // vfp version (3 or 4), with 32 registers is mendatory
 int arm_swap = 0;
 int arm_div = 0;
 int arm_v8 = 0;
+int arm_aes = 0;
+int arm_pmull = 0;
 #endif
 #else   //DYNAREC
 int box86_dynarec = 0;
 #endif
+int box86_libcef = 1;
+int box86_sdl2_jguid = 0;
 int dlsym_error = 0;
 int cycle_log = 0;
 int trace_xmm = 0;
@@ -97,6 +116,8 @@ int box86_mapclean = 0;
 int box86_zoom = 0;
 int box86_x11threads = 0;
 int box86_x11glx = 1;
+int box86_sse_flushto0 = 0;
+int box86_x87_no80bits = 0;
 int allow_missing_libs = 0;
 int allow_missing_symbols = 0;
 int fix_64bit_inodes = 0;
@@ -104,9 +125,15 @@ int box86_prefer_wrapped = 0;
 int box86_prefer_emulated = 0;
 int box86_steam = 0;
 int box86_wine = 0;
+int box86_musl = 0;
 int box86_nopulse = 0;
 int box86_nogtk = 0;
 int box86_novulkan = 0;
+#ifdef BAD_SIGNAL
+int box86_futex_waitv = 0;
+#else
+int box86_futex_waitv = 1;
+#endif
 int box86_showsegv = 0;
 char* box86_libGL = NULL;
 uintptr_t   trace_start = 0, trace_end = 0;
@@ -164,11 +191,13 @@ void my_child_fork()
         // open a new ftrace...
         fclose(ftrace);
         openFTrace(NULL);
+        //printf_log(/*LOG_DEBUG*/LOG_INFO, "Forked child of %s\n", GetLastApplyName());
     }
 }
 
-#ifdef DYNAREC
 int getNCpu();
+const char* getCpuName();
+#ifdef DYNAREC
 void GatherDynarecExtensions()
 {
     if(box86_dynarec==0)    // no need to check if no dynarec
@@ -218,6 +247,10 @@ void GatherDynarecExtensions()
         arm_div = 1;
     #ifdef AT_HWCAP2
     unsigned long hwcap2 = real_getauxval(AT_HWCAP2);
+    if(hwcap2&HWCAP2_AES)
+        arm_aes = 1;
+    if(hwcap2&HWCAP2_PMULL)
+        arm_pmull = 1;
     if((hwcap2&HWCAP2_AES) || (hwcap2&HWCAP2_CRC32))
         arm_v8 = 1;
     #endif
@@ -226,10 +259,12 @@ void GatherDynarecExtensions()
         printf_log(LOG_INFO, " SWP");
     if(arm_div)
         printf_log(LOG_INFO, " IDIVA");
+    if(arm_aes)
+        printf_log(LOG_INFO, " AES");
+    if(arm_pmull)
+        printf_log(LOG_INFO, " PMULL");
 
-    printf_log(LOG_INFO, " PageSize:%zd", box86_pagesize);
-    int ncpu = getNCpu();
-    printf_log(LOG_INFO, " Cores:%d\n", ncpu);
+    printf_log(LOG_INFO, " PageSize:%zd ", box86_pagesize);
 #endif
 }
 #endif
@@ -353,14 +388,26 @@ void LoadLogEnv()
         else if (box86_dynarec_bigblock>1)
             printf_log(LOG_INFO, "Dynarec will try to make bigger blocks\n");
     }
+    p = getenv("BOX86_DYNAREC_FORWARD");
+    if(p) {
+        int val = -1;
+        if(sscanf(p, "%d", &val)==1) {
+            if(val>=0)
+                box86_dynarec_forward = val;
+        }
+        if(box86_dynarec_forward)
+            printf_log(LOG_INFO, "Dynarec will continue block for %d bytes on forward jump\n", box86_dynarec_forward);
+        else
+            printf_log(LOG_INFO, "Dynarec will not continue block on forward jump\n");
+    }
     p = getenv("BOX86_DYNAREC_STRONGMEM");
     if(p) {
         if(strlen(p)==1) {
-            if(p[0]>='0' && p[0]<='2')
+            if(p[0]>='0' && p[0]<='3')
                 box86_dynarec_strongmem = p[0]-'0';
         }
         if(box86_dynarec_strongmem)
-            printf_log(LOG_INFO, "Dynarec will try to emulate a strong memory model%s\n", (box86_dynarec_strongmem==1)?" with limited performace loss":"");
+            printf_log(LOG_INFO, "Dynarec will try to emulate a strong memory model%s\n", (box86_dynarec_strongmem==1)?" with limited performance loss":((box86_dynarec_strongmem==3)?" with more performance loss":""));
     }
     p = getenv("BOX86_DYNAREC_X87DOUBLE");
     if(p) {
@@ -380,6 +427,15 @@ void LoadLogEnv()
         if(!box86_dynarec_fastnan)
             printf_log(LOG_INFO, "Dynarec will try to normalize generated NAN\n");
     }
+    p = getenv("BOX86_DYNAREC_FASTROUND");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_fastround = p[0]-'0';
+        }
+        if(!box86_dynarec_fastround)
+            printf_log(LOG_INFO, "Dynarec will try to generate x86 precise IEEE->int rounding\n");
+    }
     p = getenv("BOX86_DYNAREC_SAFEFLAGS");
     if(p) {
         if(strlen(p)==1) {
@@ -391,17 +447,25 @@ void LoadLogEnv()
         else
             printf_log(LOG_INFO, "Dynarec will play %s safe with x86 flags\n", (box86_dynarec_safeflags==1)?"moderatly":"it");
     }
-    p = getenv("BOX86_DYNAREC_HOTPAGE");
+    p = getenv("BOX86_DYNAREC_CALLRET");
     if(p) {
-        int val = -1;
-        if(sscanf("%d", p, &val)==1) {
-            if(val>=0)
-                box86_dynarec_hotpage = val;
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_callret = p[0]-'0';
         }
-        if(!box86_dynarec_hotpage)
-            printf_log(LOG_INFO, "Dynarec will have HotPage tagged for %d attempts\n", box86_dynarec_hotpage);
+        if(box86_dynarec_callret)
+            printf_log(LOG_INFO, "Dynarec will optimize CALL/RET\n");
         else
-            printf_log(LOG_INFO, "Dynarec will not tag HotPage\n");
+            printf_log(LOG_INFO, "Dynarec will not optimize CALL/RET\n");
+    }
+    p = getenv("BOX86_DYNAREC_WAIT");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_wait = p[0]-'0';
+        }
+        if(!box86_dynarec_wait)
+            printf_log(LOG_INFO, "Dynarec will not wait for FillBlock to ready and use Interpreter instead\n");
     }
     p = getenv("BOX86_DYNAREC_BLEEDING_EDGE");
     if(p) {
@@ -412,6 +476,33 @@ void LoadLogEnv()
         if(!box86_dynarec_bleeding_edge)
             printf_log(LOG_INFO, "Dynarec will not detect MonoBleedingEdge\n");
     }
+    p = getenv("BOX86_DYNAREC_JVM");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_jvm = p[0]-'0';
+        }
+        if(!box86_dynarec_jvm)
+            printf_log(LOG_INFO, "Dynarec will not detect libjvm\n");
+    }
+    p = getenv("BOX86_DYNAREC_TBB");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_tbb = p[0]-'0';
+        }
+        if(!box86_dynarec_tbb)
+            printf_log(LOG_INFO, "Dynarec will not detect libtbb\n");
+    }
+    p = getenv("BOX86_DYNAREC_MISSING");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_missing = p[0]-'0';
+        }
+        if(box86_dynarec_missing)
+            printf_log(LOG_INFO, "Dynarec will print missing opcodes\n");
+    }
     p = getenv("BOX86_NODYNAREC");
     if(p) {
         if (strchr(p,'-')) {
@@ -420,6 +511,19 @@ void LoadLogEnv()
                     sscanf(p, "%x-%x", &box86_nodynarec_start, &box86_nodynarec_end);
             }
             printf_log(LOG_INFO, "No Dynablock creation that start in %p - %p range\n", (void*)box86_nodynarec_start, (void*)box86_nodynarec_end);
+        }
+    }
+    p = getenv("BOX86_DYNAREC_TEST");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_dynarec_test = p[0]-'0';
+        }
+        if(box86_dynarec_test) {
+            box86_dynarec_fastnan = 0;
+            box86_dynarec_fastround = 0;
+            box86_dynarec_callret = 0;
+            printf_log(LOG_INFO, "Dynarec will compare it's execution with the interpreter (super slow, only for testing)\n");
         }
     }
 
@@ -458,6 +562,24 @@ void LoadLogEnv()
 #endif
 #endif
     // Other BOX86 env. var.
+    p = getenv("BOX86_LIBCEF");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_libcef = p[0]-'0';
+        }
+        if(!box86_libcef)
+            printf_log(LOG_INFO, "Dynarec will not detect libcef\n");
+    }
+    p = getenv("BOX86_SDL2_JGUID");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='1')
+                box86_sdl2_jguid = p[0]-'0';
+        }
+        if(!box86_sdl2_jguid)
+            printf_log(LOG_INFO, "BOX86 will workaround the use of  SDL_GetJoystickGUIDInfo with 4 args instead of 5\n");
+    }
     p = getenv("BOX86_LOAD_ADDR");
     if(p) {
         if(sscanf(p, "0x%zx", &box86_load_addr)!=1)
@@ -534,6 +656,32 @@ void LoadLogEnv()
         if(allow_missing_symbols)
             printf_log(LOG_INFO, "Allow missing needed symbols\n");
     }
+    p = getenv("BOX86_MALLOC_HACK");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='0'+2)
+                box86_malloc_hack = p[0]-'0';
+        }
+        if(!box86_malloc_hack) {
+            if(box86_malloc_hack==1) {
+                printf_log(LOG_INFO, "Malloc hook will not be redirected\n");
+            } else
+                printf_log(LOG_INFO, "Malloc hook will check for mmap/free occurrences\n");
+        }
+    }
+    p = getenv("BOX86_MUTEX_ALIGNED");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='0'+1)
+                box86_mutex_aligned = p[0]-'0';
+        }
+        if(!box86_mutex_aligned) {
+            if(box86_mutex_aligned==1) {
+                printf_log(LOG_INFO, "BOX86 will not aligned mutexes\n");
+            } else
+                printf_log(LOG_INFO, "BOX86 will wrap mutex to for them aligned\n");
+        }
+    }
     p = getenv("BOX86_NOPULSE");
         if(p) {
         if(strlen(p)==1) {
@@ -561,6 +709,20 @@ void LoadLogEnv()
         if(box86_novulkan)
             printf_log(LOG_INFO, "Disable the use of wrapped vulkan libs\n");
     }
+    p = getenv("BOX86_FUTEX_WAITV");
+    if(p) {
+        if(strlen(p)==1) {
+            if(p[0]>='0' && p[0]<='0'+1)
+                box86_futex_waitv = p[0]-'0';
+        }
+        #ifdef BAD_SIGNAL
+        if(box86_futex_waitv)
+            printf_log(LOG_INFO, "Enable the use of futex waitv syscall (if available on the system\n");
+        #else
+        if(!box86_futex_waitv)
+            printf_log(LOG_INFO, "Disable the use of futex waitv syscall\n");
+        #endif
+    }
     p = getenv("BOX86_FIX_64BIT_INODES");
         if(p) {
         if(strlen(p)==1) {
@@ -573,11 +735,11 @@ void LoadLogEnv()
     p = getenv("BOX86_JITGDB");
         if(p) {
         if(strlen(p)==1) {
-            if(p[0]>='0' && p[0]<='0'+2)
+            if(p[0]>='0' && p[0]<='0'+3)
                 jit_gdb = p[0]-'0';
         }
         if(jit_gdb)
-            printf_log(LOG_INFO, "Launch %s on segfault\n", (jit_gdb==2)?"gdbserver":"gdb");
+            printf_log(LOG_INFO, "Launch %s on segfault\n", (jit_gdb==2)?"gdbserver":((jit_gdb==3)?"lldb":"gdb"));
     }
     p = getenv("BOX86_SHOWSEGV");
         if(p) {
@@ -603,6 +765,9 @@ void LoadLogEnv()
 #ifdef DYNAREC
     GatherDynarecExtensions();
 #endif
+    int ncpu = getNCpu();
+    const char* cpuname = getCpuName();
+    printf_log(LOG_INFO, "Running on %s with %d Cores\n", cpuname, ncpu);
 }
 
 EXPORTDYN
@@ -631,9 +796,11 @@ int CountEnv(char** env)
     char** p = env;
     int c = 0;
     while(*p) {
-        if(strncmp(*p, "BOX86_", 6)!=0)
-            //if(!(strncmp(*p, "PATH=", 5)==0 || strncmp(*p, "LD_LIBRARY_PATH=", 16)==0))
-                ++c;
+        if(strncmp(*p, "BOX86_PATH=", 11)==0) {
+        } else if(strncmp(*p, "BOX86_LD_LIBRARY_PATH=", 22)==0) {
+        } else if(strncmp(*p, "BOX86_", 6)!=0) {
+            ++c;
+        }
         ++p;
     }
     return c+2;
@@ -641,14 +808,11 @@ int CountEnv(char** env)
 EXPORTDYN
 int GatherEnv(char*** dest, char** env, const char* prog)
 {
-    // Add all but BOX86_* environnement
-    // but add 2 for default BOX86_PATH and BOX86_LD_LIBRARY_PATH
+    // Add every BOX86_* environment variables
     char** p = env;    
     int idx = 0;
     int box86_path = 0;
     int box86_ld_path = 0;
-    char* path = NULL;
-    char* ld_path = NULL;
     while(*p) {
         if(strncmp(*p, "BOX86_PATH=", 11)==0) {
             (*dest)[idx++] = box_strdup(*p);
@@ -656,27 +820,19 @@ int GatherEnv(char*** dest, char** env, const char* prog)
         } else if(strncmp(*p, "BOX86_LD_LIBRARY_PATH=", 22)==0) {
             (*dest)[idx++] = box_strdup(*p);
             box86_ld_path = 1;
-        } else if(strncmp(*p, "_=", 2)==0) {
-            /*int l = strlen(prog);
-            char tmp[l+3];
-            strcpy(tmp, "_=");
-            strcat(tmp, prog);
-            (*dest)[idx++] = box_strdup(tmp);*/
         } else if(strncmp(*p, "BOX86_", 6)!=0) {
             (*dest)[idx++] = box_strdup(*p);
-            /*if(!(strncmp(*p, "PATH=", 5)==0 || strncmp(*p, "LD_LIBRARY_PATH=", 16)==0)) {
-            }*/
         }
         ++p;
     }
-    // update the calloc of envv when adding new variables here
+    // Add default values for BOX86_PATH and BOX86_LD_LIBRARY_PATH
     if(!box86_path) {
         (*dest)[idx++] = box_strdup("BOX86_PATH=.:bin");
     }
     if(!box86_ld_path) {
         (*dest)[idx++] = box_strdup("BOX86_LD_LIBRARY_PATH=.:lib");
     }
-    // add "_=prog" at the end...
+    // Add "_=prog" at the end...
     if(prog) {
         int l = strlen(prog);
         char tmp[l+3];
@@ -690,14 +846,8 @@ int GatherEnv(char*** dest, char** env, const char* prog)
 }
 
 
-void PrintHelp() {
-    printf("\n\nThis is Box86, the Linux x86 emulator with a twist\n");
-    printf("\nUsage is box86 [options] path/to/software [args]\n");
-    printf("to launch x86 software\n");
-    printf(" options can be :\n");
-    printf("    '-v'|'--version' to print box86 version and quit\n");
-    printf("    '-h'|'--help'    to print box86 help and quit\n");
-    printf("You can also set some environment variables:\n");
+void PrintFlags() {
+    printf("Environment Variables:\n");
     printf(" BOX86_PATH is the box86 version of PATH (default is '.:bin')\n");
     printf(" BOX86_LD_LIBRARY_PATH is the box86 version LD_LIBRARY_PATH (default is '.:lib')\n");
     printf(" BOX86_LOG with 0/1/2/3 or NONE/INFO/DEBUG/DUMP to set the printed debug info (level 3 is level 2 + BOX86_DUMP)\n");
@@ -725,7 +875,7 @@ void PrintHelp() {
     printf(" BOX86_DYNAREC_TRACE with 0/1 to disable or enable Trace on generated code too\n");
 #endif
 #endif
-    printf(" BOX86_TRACE_FILE with FileName to redirect logs in a file (or stderr to use stderr instead of stdout)");
+    printf(" BOX86_TRACE_FILE with FileName to redirect logs in a file (or stderr to use stderr instead of stdout)\n");
     printf(" BOX86_DLSYM_ERROR with 1 to log dlsym errors\n");
     printf(" BOX86_LOAD_ADDR=0xXXXXXX try to load at 0xXXXXXX main binary (if binary is a PIE)\n");
     printf(" BOX86_NOSIGSEGV=1 to disable handling of SigSEGV\n");
@@ -734,11 +884,11 @@ void PrintHelp() {
 #ifdef PANDORA
     printf(" BOX86_X11COLOR16=1 to try convert X11 color from 32 bits to 16 bits (to avoid light green on light cyan windows\n");
 #endif
-    printf(" BOX86_X11THREADS=1 to call XInitThreads when loading X11 (for old Loki games with Loki_Compat lib)");
+    printf(" BOX86_X11THREADS=1 to call XInitThreads when loading X11 (for old Loki games with Loki_Compat lib)\n");
     printf(" BOX86_LIBGL=libXXXX set the name (and optionnaly full path) for libGL.so.1\n");
     printf(" BOX86_LD_PRELOAD=XXXX[:YYYYY] force loading XXXX (and YYYY...) libraries with the binary\n");
-    printf(" BOX86_ALLOWMISSINGLIBS with 1 to allow to continue even if a lib is missing (unadvised, will probably  crash later)\n");
-    printf(" BOX64_PREFER_EMULATED=1 to prefer emulated libs first (execpt for glibc, alsa, pulse, GL, vulkan and X11\n");
+    printf(" BOX86_ALLOWMISSINGLIBS with 1 to allow to continue even if a lib is missing (unadvised, will probably crash later)\n");
+    printf(" BOX64_PREFER_EMULATED=1 to prefer emulated libs first (execpt for glibc, alsa, pulse, GL, vulkan and X11)\n");
     printf(" BOX64_PREFER_WRAPPED if box86 will use wrapped libs even if the lib is specified with absolute path\n");
     printf(" BOX86_NOPULSE=1 to disable the loading of pulseaudio libs\n");
     printf(" BOX86_NOGTK=1 to disable the loading of wrapped gtk libs\n");
@@ -748,6 +898,15 @@ void PrintHelp() {
     printf(" BOX86_JITGDB with 1 to launch \"gdb\" when a segfault is trapped, attached to the offending process\n");
 }
 
+void PrintHelp() {
+    printf("This is Box86, the Linux x86 emulator with a twist\n");
+    printf("\nUsage is 'box86 [options] path/to/software [args]' to launch x86 software.\n");
+    printf(" options are:\n");
+    printf("    '-v'|'--version' to print box86 version and quit\n");
+    printf("    '-h'|'--help' to print this and quit\n");
+    printf("    '-f'|'--flags' to print box86 flags and quit\n");
+}
+
 void addNewEnvVar(const char* s)
 {
     if(!s)
@@ -755,7 +914,7 @@ void addNewEnvVar(const char* s)
     char* p = box_strdup(s);
     char* e = strchr(p, '=');
     if(!e) {
-        printf_log(LOG_INFO, "Invalid speicifc env. var. '%s'\n", s);
+        printf_log(LOG_INFO, "Invalid specific env. var. '%s'\n", s);
         box_free(p);
         return;
     }
@@ -768,22 +927,21 @@ void addNewEnvVar(const char* s)
 EXPORTDYN
 void LoadEnvVars(box86context_t *context)
 {
+    char *p;
     // Check custom env. var. and add them if needed
-    {
-        char* p = getenv("BOX86_ENV");
-        if(p)
+    p = getenv("BOX86_ENV");
+    if(p)
+        addNewEnvVar(p);
+    int i = 1;
+    char box86_env[50];
+    do {
+        sprintf(box86_env, "BOX86_ENV%d", i);
+        p = getenv(box86_env);
+        if(p) {
             addNewEnvVar(p);
-        int i = 1;
-        char box86_env[50];
-        do {
-            sprintf(box86_env, "BOX86_ENV%d", i);
-            p = getenv(box86_env);
-            if(p) {
-                addNewEnvVar(p);
-                ++i;
-            }
-        } while(p);
-    }
+            ++i;
+        }
+    } while(p);
     // check BOX86_LD_LIBRARY_PATH and load it
     LoadEnvPath(&context->box86_ld_lib, ".:lib:lib32:x86:i686", "BOX86_LD_LIBRARY_PATH");
 #ifdef PANDORA
@@ -793,6 +951,7 @@ void LoadEnvVars(box86context_t *context)
         AddPath("/mnt/utmp/box86/lib/i386-linux-gnu", &context->box86_ld_lib, 1);
     //TODO: add relative path to box86 location
 #endif
+#ifndef TERMUX
     if(FileExist("/lib/box86", 0))
         AddPath("/lib/box86", &context->box86_ld_lib, 1);
     if(FileExist("/usr/lib/box86", 0))
@@ -807,6 +966,12 @@ void LoadEnvVars(box86context_t *context)
         AddPath("/usr/lib/i686-pc-linux-gnu", &context->box86_ld_lib, 1);
     if(FileExist("/usr/lib32", 0))
         AddPath("/usr/lib32", &context->box86_ld_lib, 1);
+#else
+    if(FileExist("/data/data/com.termux/files/usr/lib/i386-linux-gnu", 0))
+        AddPath("/data/data/com.termux/files/usr/lib/i386-linux-gnu", &context->box86_ld_lib, 1);
+    if(FileExist("/data/data/com.termux/files/usr/lib/i686-linux-gnu", 0))
+        AddPath("/data/data/com.termux/files/usr/lib/i686-linux-gnu", &context->box86_ld_lib, 1);
+#endif
     if(getenv("LD_LIBRARY_PATH"))
         PrependList(&context->box86_ld_lib, getenv("LD_LIBRARY_PATH"), 1);   // in case some of the path are for x86 world
     if(getenv("BOX86_EMULATED_LIBS")) {
@@ -824,50 +989,37 @@ void LoadEnvVars(box86context_t *context)
     AddPath("libssl.so.1.0.0", &context->box86_emulated_libs, 0);
     AddPath("libcrypto.so.1", &context->box86_emulated_libs, 0);
     AddPath("libcrypto.so.1.0.0", &context->box86_emulated_libs, 0);
-
-    if(getenv("BOX86_PREFER_WRAPPED")) {
-        if (strcmp(getenv("BOX86_PREFER_WRAPPED"), "1")==0) {
-            box86_prefer_wrapped = 1;
-            printf_log(LOG_INFO, "BOX86: Prefer Wrapped libs\n");
-    	}
-    }
-    if(getenv("BOX86_PREFER_EMULATED")) {
-        if (strcmp(getenv("BOX86_PREFER_EMULATED"), "1")==0) {
-            box86_prefer_emulated = 1;
-            printf_log(LOG_INFO, "BOX86: Prefer Emulated libs\n");
-    	}
-    }
-    if(getenv("BOX86_NOSIGSEGV")) {
-        if (strcmp(getenv("BOX86_NOSIGSEGV"), "1")==0) {
-            context->no_sigsegv = 1;
-            printf_log(LOG_INFO, "BOX86: Disabling handling of SigSEGV\n");
-        }
-    }
-    if(getenv("BOX86_NOSIGILL")) {
-        if (strcmp(getenv("BOX86_NOSIGILL"), "1")==0) {
-            context->no_sigill = 1;
-            printf_log(LOG_INFO, "BOX86: Disabling handling of SigILL\n");
-        }
-    }
     // check BOX86_PATH and load it
     LoadEnvPath(&context->box86_path, ".:bin", "BOX86_PATH");
     if(getenv("PATH"))
         AppendList(&context->box86_path, getenv("PATH"), 1);   // in case some of the path are for x86 world
+
+#define READENV(v, name, dest, eqn) \
+    do {                         \
+        p = getenv(name);        \
+        if (p) {                 \
+            if (!strcmp(p, v)) { \
+                dest = 1;        \
+                eqn;             \
+            }                    \
+        }                        \
+    } while (0)
+#define READENV0(name, dest, eqn) READENV("0", name, dest, eqn)
+#define READENV1(name, dest, log) READENV("1", name, dest, printf_log(LOG_INFO, log))
+    READENV1("BOX86_SSE_FLUSHTO0", box86_sse_flushto0, "BOX86: Direct apply of SSE Flush to 0 flag\n");
+    READENV1("BOX86_X87_NO80BITS", box86_x87_no80bits, "BOX86: all 80bits x87 long double will be handle as double\n");
+    READENV1("BOX86_PREFER_WRAPPED", box86_prefer_wrapped, "BOX86: Prefer Wrapped libs\n");
+    READENV1("BOX86_PREFER_EMULATED", box86_prefer_emulated, "BOX86: Prefer Emulated libs\n");
+    READENV1("BOX86_NOSIGSEGV", context->no_sigsegv, "BOX86: Disabling handling of SigSEGV\n");
+    READENV1("BOX86_NOSIGILL", context->no_sigill, "BOX86: Disabling handling of SigILL\n");
 #ifdef HAVE_TRACE
-    char* p = getenv("BOX86_TRACE");
-    if(p) {
-        if (strcmp(p, "0")) {
-            context->x86trace = 1;
-            box86_trace = p;
-        }
-    }
-    p = getenv("BOX86_TRACE_INIT");
-    if(p) {
-        if (strcmp(p, "0")) {
-            context->x86trace = 1;
-            trace_init = p;
-        }
-    }
+    p = getenv("BOX86_TRACE");
+    if(p && strcmp(p, "0")) {
+        context->x86trace = 1;
+        box86_trace = p;
+    };
+        
+    READENV0("BOX86_TRACE_INIT", context->x86trace, trace_init = p);
     if(my_context->x86trace) {
         printf_log(LOG_INFO, "Initializing Zydis lib\n");
         if(InitX86Trace(my_context)) {
@@ -876,6 +1028,9 @@ void LoadEnvVars(box86context_t *context)
         }
     }
 #endif
+#undef READENV
+#undef READENV0
+#undef READENV1
 #ifdef BUILD_LIB
     context->argc = 1;  // need 1
     context->argv = (char**)box_malloc(sizeof(char*));
@@ -884,28 +1039,31 @@ void LoadEnvVars(box86context_t *context)
 }
 
 EXPORTDYN
-void setupTraceInit(box86context_t* context)
+void setupTraceInit()
 {
 #ifdef HAVE_TRACE
     char* p = trace_init;
     if(p) {
         setbuf(stdout, NULL);
-        uintptr_t trace_start=0, trace_end=0;
+        uintptr_t s_trace_start=0, s_trace_end=0;
         if (strcmp(p, "1")==0)
             SetTraceEmu(0, 0);
         else if (strchr(p,'-')) {
-            if(sscanf(p, "%d-%d", &trace_start, &trace_end)!=2) {
-                if(sscanf(p, "0x%X-0x%X", &trace_start, &trace_end)!=2)
-                    sscanf(p, "%x-%x", &trace_start, &trace_end);
+            if(sscanf(p, "%zd-%zd", &s_trace_start, &s_trace_end)!=2) {
+                if(sscanf(p, "0x%zX-0x%zX", &s_trace_start, &s_trace_end)!=2)
+                    sscanf(p, "%zx-%zx", &s_trace_start, &s_trace_end);
             }
-            if(trace_start || trace_end)
-                SetTraceEmu(trace_start, trace_end);
+            if(s_trace_start || s_trace_end)
+                SetTraceEmu(s_trace_start, s_trace_end);
         } else {
-            if (GetGlobalSymbolStartEnd(my_context->maplib, p, &trace_start, &trace_end, NULL, -1, NULL)) {
-                SetTraceEmu(trace_start, trace_end);
-                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)trace_start, (void*)trace_end);
+            if (my_context->elfs && GetGlobalSymbolStartEnd(my_context->maplib, p, &s_trace_start, &s_trace_end, NULL, -1, NULL, NULL, NULL)) {
+                SetTraceEmu(s_trace_start, s_trace_end);
+                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)s_trace_start, (void*)s_trace_end);
+            } else if(my_context->elfs && GetLocalSymbolStartEnd(my_context->maplib, p, &s_trace_start, &s_trace_end, NULL, -1, NULL, NULL, NULL)) {
+                SetTraceEmu(s_trace_start, s_trace_end);
+                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)s_trace_start, (void*)s_trace_end);
             } else {
-                printf_log(LOG_NONE, "Warning, symbol to Traced (\"%s\") not found, disabling trace\n", p);
+                printf_log(LOG_NONE, "Warning, symbol to trace (\"%s\") not found, disabling trace\n", p);
                 SetTraceEmu(0, 100);  // disabling trace, mostly
             }
         }
@@ -919,37 +1077,37 @@ void setupTraceInit(box86context_t* context)
 }
 
 EXPORTDYN
-void setupTrace(box86context_t* context)
+void setupTrace()
 {
 #ifdef HAVE_TRACE
     char* p = box86_trace;
     if(p) {
         setbuf(stdout, NULL);
-        uintptr_t trace_start=0, trace_end=0;
+        uintptr_t s_trace_start=0, s_trace_end=0;
         if (strcmp(p, "1")==0)
             SetTraceEmu(0, 0);
         else if (strchr(p,'-')) {
-            if(sscanf(p, "%d-%d", &trace_start, &trace_end)!=2) {
-                if(sscanf(p, "0x%X-0x%X", &trace_start, &trace_end)!=2)
-                    sscanf(p, "%x-%x", &trace_start, &trace_end);
+            if(sscanf(p, "%zd-%zd", &s_trace_start, &s_trace_end)!=2) {
+                if(sscanf(p, "0x%zX-0x%zX", &s_trace_start, &s_trace_end)!=2)
+                    sscanf(p, "%zx-%zx", &s_trace_start, &s_trace_end);
             }
-            if(trace_start || trace_end) {
-                SetTraceEmu(trace_start, trace_end);
-                if(!trace_start && trace_end==1) {
+            if(s_trace_start || s_trace_end) {
+                SetTraceEmu(s_trace_start, s_trace_end);
+                if(!s_trace_start && s_trace_end==1) {
                     printf_log(LOG_INFO, "TRACE enabled but inactive\n");
                 } else {
-                    printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)trace_start, (void*)trace_end);
+                    printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)s_trace_start, (void*)s_trace_end);
                 }
             }
         } else {
-            if (GetGlobalSymbolStartEnd(my_context->maplib, p, &trace_start, &trace_end, NULL, -1, NULL)) {
-                SetTraceEmu(trace_start, trace_end);
-                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)trace_start, (void*)trace_end);
-            } else if(GetLocalSymbolStartEnd(my_context->maplib, p, &trace_start, &trace_end, NULL, -1, NULL)) {
-                SetTraceEmu(trace_start, trace_end);
-                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)trace_start, (void*)trace_end);
+            if (GetGlobalSymbolStartEnd(my_context->maplib, p, &s_trace_start, &s_trace_end, NULL, -1, NULL, NULL, NULL)) {
+                SetTraceEmu(s_trace_start, s_trace_end);
+                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)s_trace_start, (void*)s_trace_end);
+            } else if(GetLocalSymbolStartEnd(my_context->maplib, p, &s_trace_start, &s_trace_end, NULL, -1, NULL, NULL, NULL)) {
+                SetTraceEmu(s_trace_start, s_trace_end);
+                printf_log(LOG_INFO, "TRACE on %s only (%p-%p)\n", p, (void*)s_trace_start, (void*)s_trace_end);
             } else {
-                printf_log(LOG_NONE, "Warning, symbol to Traced (\"%s\") not found, trying to set trace later\n", p);
+                printf_log(LOG_NONE, "Warning, symbol to trace (\"%s\") not found, trying to set trace later\n", p);
                 SetTraceEmu(0, 1);  // disabling trace, mostly
                 if(trace_func)
                     box_free(trace_func);
@@ -959,23 +1117,29 @@ void setupTrace(box86context_t* context)
     }
 #endif
 }
+void endMallocHook();
 
 void endBox86()
 {
-    if(!my_context)
+    if(!my_context || box86_quit)
         return;
+
+    box86_quit = 1;
+    endMallocHook();
     x86emu_t* emu = thread_get_emu();
     //atexit first
     printf_log(LOG_DEBUG, "Calling atexit registered functions\n");
     CallAllCleanup(emu);
-    // then call all the fini
     printf_log(LOG_DEBUG, "Calling fini for all loaded elfs and unload native libs\n");
     RunElfFini(my_context->elfs[0], emu);
     FreeLibrarian(&my_context->local_maplib, emu);    // unload all libs
     FreeLibrarian(&my_context->maplib, emu);    // unload all libs
+    void closeAllDLOpenned();
+    closeAllDLOpenned();    // close residual dlopenned libs
+    #if 0
     // waiting for all thread except this one to finish
     int this_thread = GetTID();
-    int pid = getpid();
+    // int pid = getpid();
     int running = 1;
     int attempt = 0;
     printf_log(LOG_DEBUG, "Waiting for all threads to finish before unloading box86context\n");
@@ -1011,18 +1175,40 @@ void endBox86()
             closedir(proc_dir);
         }
     }
+    #endif
     // all done, free context
     FreeBox86Context(&my_context);
+    #ifdef DYNAREC
+    // disable dynarec now
+    box86_dynarec = 0;
+    #endif
     if(box86_libGL) {
         box_free(box86_libGL);
         box86_libGL = NULL;
     }
 }
 
+static void add_argv(const char* what) {
+    int there = 0;
+    for(int i=1; i<my_context->argc && !there; ++i)
+        if(!strcmp(my_context->argv[i], what))
+            there = 1;
+    if(!there) {
+        my_context->argv = (char**)box_realloc(my_context->argv, (my_context->argc+1)*sizeof(char*));
+        my_context->argv[my_context->argc] = box_strdup(what);
+        my_context->argc++;
+    }
+}
+
 static void load_rcfiles()
 {
+    #ifndef TERMUX
     if(FileExist("/etc/box86.box86rc", IS_FILE))
         LoadRCFile("/etc/box86.box86rc");
+    #else
+    if(FileExist("/data/data/com.termux/files/usr/etc/box86.box86rc", IS_FILE))
+        LoadRCFile("/data/data/com.termux/files/usr/etc/box86.box86rc");
+    #endif
     #ifdef PANDORA
     if(FileExist("/mnt/utmp/codeblocks/usr/etc/box86.box86rc", IS_FILE))
         LoadRCFile("/mnt/utmp/codeblocks/usr/etc/box86.box86rc");
@@ -1090,9 +1276,12 @@ int main(int argc, const char **argv, char **env)
     init_auxval(argc, argv, environ?environ:env);
     // trying to open and load 1st arg
     if(argc==1) {
-        PrintBox86Version();
+        /*PrintBox86Version();
         PrintHelp();
-        return 1;
+        return 1;*/
+        printf("BOX86: Missing operand after 'box86'\n");
+        printf("See 'box86 --help' for more information.\n");
+        exit(0);
     }
     if(argc>1 && !strcmp(argv[1], "/usr/bin/gdb"))
         exit(0);
@@ -1146,6 +1335,10 @@ int main(int argc, const char **argv, char **env)
             PrintHelp();
             exit(0);
         }
+        if(!strcmp(prog, "-f") || !strcmp(prog, "--flags")) {
+            PrintFlags();
+            exit(0);
+        }
         // other options?
         if(!strcmp(prog, "--")) {
             prog = argv[++nextarg];
@@ -1172,6 +1365,7 @@ int main(int argc, const char **argv, char **env)
         }
         box86_wine = 1;
     }
+    int wine_steam = 0;
     // check if this is wine
     if(!strcmp(prog, "wine") || (strlen(prog)>5 && !strcmp(prog+strlen(prog)-strlen("/wine"), "/wine"))) {
         const char* prereserve = getenv("WINEPRELOADRESERVE");
@@ -1180,10 +1374,32 @@ int main(int argc, const char **argv, char **env)
             wine_prereserve(prereserve);
         // special case for winedbg, doesn't work anyway
         if(argv[nextarg+1] && strstr(argv[nextarg+1], "winedbg")==argv[nextarg+1]) {
-            printf_log(LOG_NONE, "winedbg detected, not launching it!\n");
-            exit(0);    // exiting, it doesn't work anyway
+            if(getenv("BOX86_WINEDBG")) {
+                box86_nobanner = 1;
+                box86_log = 0;
+            } else {
+                printf_log(LOG_NONE, "winedbg detected, not launching it!\n");
+                exit(0);    // exiting, it doesn't work anyway
+            }
         }
         box86_wine = 1;
+        // if program being called is wine_steam (rudimentary check...) and if no other argument are there
+        if(argv[nextarg+1] && argv[nextarg+1][0]!='-' /*&& argc==(nextarg+2)*/) {
+            if(!strcasecmp(argv[nextarg+1], "steam.exe"))
+                wine_steam = 1;
+            else if(!strcasecmp(argv[nextarg+1], "steam"))
+                wine_steam = 1;
+            if(!wine_steam) {
+                const char* pp = strrchr(argv[nextarg+1], '/');
+                if(pp && !strcasecmp(pp+1, "steam.exe"))
+                    wine_steam = 1;
+                else {
+                    pp = strrchr(argv[nextarg+1], '\\');
+                    if(pp && !strcasecmp(pp+1, "steam.exe"))
+                        wine_steam = 1;
+                }
+            }
+        }
     }
     // check if this is wineserver
     if(!strcmp(prog, "wineserver") || (strlen(prog)>9 && !strcmp(prog+strlen(prog)-strlen("/wineserver"), "/wineserver"))) {
@@ -1225,8 +1441,8 @@ int main(int argc, const char **argv, char **env)
     // prepare all other env. var
     my_context->envc = CountEnv(environ?environ:env);
     printf_log(LOG_INFO, "Counted %d Env var\n", my_context->envc);
-    // allocate extra space for new environment variables such as BOX86_PATH
-    my_context->envv = (char**)box_calloc(my_context->envc+4, sizeof(char*));
+    // allocate extra space for the new environment variable _ and the null terminator
+    my_context->envv = (char**)box_calloc(my_context->envc+2, sizeof(char*));
     GatherEnv(&my_context->envv, environ?environ:env, my_context->box86path);
     if(box86_dump) {
         for (int i=0; i<my_context->envc; ++i)
@@ -1278,7 +1494,11 @@ int main(int argc, const char **argv, char **env)
     else
         ++prgname;
     if(box86_wine) {
-        AddPath("libdl.so.2", &ld_preload, 0);
+        #ifdef ANDROID
+            AddPath("libdl.so", &ld_preload, 0);
+        #else
+            AddPath("libdl.so.2", &ld_preload, 0);
+        #endif
     }
     // special case for steam that somehow seems to alter libudev opaque pointer (udev_monitor)
     if(strstr(prgname, "steam")==prgname) {
@@ -1339,14 +1559,25 @@ int main(int argc, const char **argv, char **env)
     /*if(!strcmp(prgname, "gdb")) {
         exit(-1);
     }*/
-    ApplyParams("*");   // [*] is a special setting for all process
-    ApplyParams(prgname);
+    ApplyParams("*", &ld_preload);   // [*] is a special setting for all process
+    ApplyParams(prgname, &ld_preload);
 
     for(int i=1; i<my_context->argc; ++i) {
         my_context->argv[i] = box_strdup(argv[i+nextarg]);
         printf_log(LOG_INFO, "argv[%i]=\"%s\"\n", i, my_context->argv[i]);
     }
-
+    if(box86_nosandbox)
+    {
+        add_argv("--no-sandbox");
+    }
+    if(wine_steam /*|| box86_steam*/) {
+        printf_log(LOG_INFO, "Steam%s detected, adding -cef-single-process -cef-in-process-gpu -cef-disable-sandbox -no-cef-sandbox -cef-disable-breakpad to parameters", wine_steam?".exe":"");
+        add_argv("-cef-single-process");
+        add_argv("-cef-in-process-gpu");
+        add_argv("-cef-disable-sandbox");
+        add_argv("-no-cef-sandbox");
+        add_argv("-cef-disable-breakpad");
+    }
     // check if file exist
     if(!my_context->argv[0] || !FileExist(my_context->argv[0], IS_FILE)) {
         printf_log(LOG_NONE, "Error: file is not found (check BOX86_PATH)\n");
@@ -1378,7 +1609,7 @@ int main(int argc, const char **argv, char **env)
     if(!elf_header) {
         int x64 = my_context->box64path?FileIsX64ELF(my_context->fullpath):0;
         int script = my_context->bashpath?FileIsShell(my_context->fullpath):0;
-        printf_log(LOG_NONE, "Error: reading elf header of %s, try to launch %s instead\n", my_context->fullpath, x64?"using box64":(script?"using bash":"natively"));
+        printf_log(LOG_NONE, "Error: reading elf header of %s, trying to launch %s instead\n", my_context->fullpath, x64?"using box64":(script?"using bash":"natively"));
         fclose(f);
         FreeCollection(&ld_preload);
         int ret;
@@ -1412,32 +1643,21 @@ int main(int argc, const char **argv, char **env)
 
     if(CalcLoadAddr(elf_header)) {
         printf_log(LOG_NONE, "Error: reading elf header of %s\n", my_context->fullpath);
-        fclose(f);
         free_contextargv();
         FreeBox86Context(&my_context);
         FreeCollection(&ld_preload);
+        FreeElfHeader(&elf_header);
         return -1;
     }
     // allocate memory
-    if(AllocElfMemory(my_context, elf_header, 1)) {
-        printf_log(LOG_NONE, "Error: allocating memory for elf %s\n", my_context->fullpath);
-        fclose(f);
+    if(AllocLoadElfMemory(my_context, elf_header, 1)) {
+        printf_log(LOG_NONE, "Error: loading elf %s\n", my_context->fullpath);
         free_contextargv();
         FreeBox86Context(&my_context);
         FreeCollection(&ld_preload);
+        FreeElfHeader(&elf_header);
         return -1;
     }
-    // Load elf into memory
-    if(LoadElfMemory(f, my_context, elf_header)) {
-        printf_log(LOG_NONE, "Error: loading in memory elf %s\n", my_context->fullpath);
-        fclose(f);
-        free_contextargv();
-        FreeBox86Context(&my_context);
-        FreeCollection(&ld_preload);
-        return -1;
-    }
-    // can close the file now
-    fclose(f);
     my_context->brk = ElfGetBrk(elf_header);
     if(ElfCheckIfUseTCMallocMinimal(elf_header)) {
         if(!box86_tcmalloc_minimal) {
@@ -1485,7 +1705,7 @@ int main(int argc, const char **argv, char **env)
             printf_log(LOG_INFO, "BOX86: Using tcmalloc_minimal.so.4, and it's in the LD_PRELOAD command\n");
         }
     }
-#if defined(RPI) || defined(RK3399) || defined(GOA_CLONE)
+#if defined(RPI) || defined(RK3399) || defined(GOA_CLONE) || defined(PYRA)
     // before launching emulation, let's check if this is a mojosetup from GOG
     if (((strstr(prog, "bin/linux/x86/mojosetup") && getenv("MOJOSETUP_BASE")) || strstr(prog, ".mojosetup/mojosetup"))
        && getenv("GTK2_RC_FILES")) {
@@ -1513,7 +1733,12 @@ int main(int argc, const char **argv, char **env)
         memset(endp - diff, 0, diff); // fill reminder with NULL
         for(int i=nextarg; i<argc; ++i)
             argv[i] -= diff;    // adjust strings
+        my_context->orig_argc = argc;
+        my_context->orig_argv = (char**)argv;
     }
+    box86_isglibc234 = GetNeededVersionForLib(elf_header, "libc.so.6", "GLIBC_2.34");
+    if(box86_isglibc234)
+        printf_log(LOG_DEBUG, "Program linked with GLIBC 2.34+\n");
     // get and alloc stack size and align
     if(CalcStackSize(my_context)) {
         printf_log(LOG_NONE, "Error: allocating stack\n");
@@ -1577,15 +1802,24 @@ int main(int argc, const char **argv, char **env)
     AddMainElfToLinkmap(elf_header);
     // pre-load lib if needed
     if(ld_preload.size) {
-        for(int i=0; i<ld_preload.size; ++i)
-            if(AddNeededLib(my_context->maplib, &my_context->neededlibs, NULL, 0, 0, (const char**)&ld_preload.paths[i], 1, my_context, emu)) {
-                printf_log(LOG_INFO, "Warning, cannot pre-load the lib (%s)\n", ld_preload.paths[i]);
-            }            
+        my_context->preload = new_neededlib(0);
+        for(int i=0; i<ld_preload.size; ++i) {
+            needed_libs_t* tmp = new_neededlib(1);
+            tmp->names[0] = ld_preload.paths[i];
+            if(AddNeededLib(my_context->maplib, 0, 0, tmp, elf_header, my_context, emu)) {
+                printf_log(LOG_INFO, "Warning, cannot pre-load %s\n", tmp->names[0]);
+                RemoveNeededLib(my_context->maplib, 0, tmp, my_context, emu);
+            } else {
+                for(int j=0; j<tmp->size; ++j)
+                    add1lib_neededlib(my_context->preload, tmp->libs[j], tmp->names[j]);
+                free_neededlib(tmp);
+            }
+        }
     }
     FreeCollection(&ld_preload);
     // Call librarian to load all dependant elf
-    if(LoadNeededLibs(elf_header, my_context->maplib, &my_context->neededlibs, NULL, 0, 0, my_context, emu)) {
-        printf_log(LOG_NONE, "Error: loading needed libs in elf %s\n", my_context->fullpath);
+    if(LoadNeededLibs(elf_header, my_context->maplib, 0, 0, my_context, emu)) {
+        printf_log(LOG_NONE, "Error: loading needed libs in elf %s\n", my_context->argv[0]);
         FreeBox86Context(&my_context);
         return -1;
     }
@@ -1599,29 +1833,32 @@ int main(int argc, const char **argv, char **env)
     // and handle PLT
     RelocateElfPlt(my_context->maplib, NULL, 0, elf_header);
     // defered init
-    RunDeferedElfInit(emu);
+    setupTraceInit();
+    RunDeferredElfInit(emu);
     // update TLS of main elf
     RefreshElfTLS(elf_header);
     // do some special case check, _IO_2_1_stderr_ and friends, that are setup by libc, but it's already done here, so need to do a copy
     ResetSpecialCaseMainElf(elf_header);
     // init...
-    setupTrace(my_context);
+    setupTrace();
     // get entrypoint
     my_context->ep = GetEntryPoint(my_context->maplib, elf_header);
 
     atexit(endBox86);
+    loadProtectionFromMap();
     
     // emulate!
     printf_log(LOG_DEBUG, "Start x86emu on Main\n");
     // Stack is ready, with stacked: NULL env NULL argv argc
     SetEIP(emu, my_context->ep);
     ResetFlags(emu);
-    PushExit(emu);  // push to pop it just after
+    Push32(emu, my_context->exit_bridge);  // push to pop it just after
     SetEDX(emu, Pop32(emu));    // EDX is exit function
     DynaRun(emu);
     // Get EAX
     int ret = GetEAX(emu);
     printf_log(LOG_DEBUG, "Emulation finished, EAX=%d\n", ret);
+    endBox86();
 
     if(trace_func)  {
         box_free(trace_func);

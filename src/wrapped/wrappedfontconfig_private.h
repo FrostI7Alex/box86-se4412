@@ -42,7 +42,7 @@ GO(FcConfigAppFontAddFile, iFpp)
 //GO(FcConfigAppFontClear, 
 //GO(FcConfigBuildFonts, 
 //GO(FcConfigCreate, 
-//GO(FcConfigDestroy, 
+GO(FcConfigDestroy, vFp)
 //GO(FcConfigEnableHome, 
 //GO(FcConfigFilename, 
 GO(FcConfigGetBlanks, pFp)
@@ -96,9 +96,9 @@ GO(FcFreeTypeQueryFace, pFppip)
 //GO(FcGetLangs, 
 GO(FcGetVersion, iFv)
 GO(FcInit, iFv)
-//GO(FcInitBringUptoDate, 
+GO(FcInitBringUptoDate, iFv)
 //GO(FcInitLoadConfig, 
-//GO(FcInitLoadConfigAndFonts, 
+GO(FcInitLoadConfigAndFonts, pFv)
 GO(FcInitReinitialize, iFv)
 //GO(FcLangGetCharSet, 
 GO(FcLangSetAdd, iFpp)

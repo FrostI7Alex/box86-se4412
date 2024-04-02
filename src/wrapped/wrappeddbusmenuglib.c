@@ -35,10 +35,10 @@ GO(3)
 
 // DbusmenuClientTypeHandler
 #define GO(A)   \
-static uintptr_t my_DbusmenuClientTypeHandler_fct_##A = 0;                                  \
-static int my_DbusmenuClientTypeHandler_##A(void* a, void* b, void* c, void* d)             \
-{                                                                                           \
-    return RunFunction(my_context, my_DbusmenuClientTypeHandler_fct_##A, 4, a, b, c, d);    \
+static uintptr_t my_DbusmenuClientTypeHandler_fct_##A = 0;                                      \
+static int my_DbusmenuClientTypeHandler_##A(void* a, void* b, void* c, void* d)                 \
+{                                                                                               \
+    return RunFunctionFmt(my_DbusmenuClientTypeHandler_fct_##A, "pppp", a, b, c, d);\
 }
 SUPER()
 #undef GO
@@ -58,10 +58,10 @@ static void* findDbusmenuClientTypeHandlerFct(void* fct)
 
 // DbusmenuMenuitem
 #define GO(A)   \
-static uintptr_t my_DbusmenuMenuitem_fct_##A = 0;                   \
-static void my_DbusmenuMenuitem_##A(void* a, void* b)               \
-{                                                                   \
-    RunFunction(my_context, my_DbusmenuMenuitem_fct_##A, 2, a, b);  \
+static uintptr_t my_DbusmenuMenuitem_fct_##A = 0;                       \
+static void my_DbusmenuMenuitem_##A(void* a, void* b)                   \
+{                                                                       \
+    RunFunctionFmt(my_DbusmenuMenuitem_fct_##A, "pp", a, b);\
 }
 SUPER()
 #undef GO
@@ -83,16 +83,19 @@ static void* findDbusmenuMenuitemFct(void* fct)
 
 EXPORT int my_dbusmenu_client_add_type_handler(x86emu_t* emu, void* client, void* type, void* f)
 {
+    (void)emu;
     return my->dbusmenu_client_add_type_handler(client, type, findDbusmenuClientTypeHandlerFct(f));
 }
 
 EXPORT void my_dbusmenu_menuitem_foreach(x86emu_t* emu, void* mi, void* f, void* data)
 {
+    (void)emu;
     my->dbusmenu_menuitem_foreach(mi, findDbusmenuMenuitemFct(f), data);
 }
 
 EXPORT void my_dbusmenu_menuitem_send_about_to_show(x86emu_t* emu, void* mi, void* f, void* data)
 {
+    (void)emu;
     my->dbusmenu_menuitem_send_about_to_show(mi, findDbusmenuMenuitemFct(f), data);
 }
 
@@ -107,4 +110,3 @@ EXPORT void my_dbusmenu_menuitem_send_about_to_show(x86emu_t* emu, void* mi, voi
     freeMy();
 
 #include "wrappedlib_init.h"
-

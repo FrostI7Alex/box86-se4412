@@ -21,7 +21,7 @@
 const char* dbusglib1Name = "libdbus-glib-1.so.2";
 #define LIBNAME dbusglib1
 
-//#define ADDED_FUNCTIONS()           \
+#define ADDED_FUNCTIONS()
 
 #include "generated/wrappeddbusglib1types.h"
 
@@ -35,10 +35,10 @@ const char* dbusglib1Name = "libdbus-glib-1.so.2";
 
 // GDestroyNotify
 #define GO(A)   \
-static uintptr_t my_GDestroyNotify_fct_##A = 0;   \
-static void my_GDestroyNotify_##A(void* data)     \
-{                                       \
-    RunFunction(my_context, my_GDestroyNotify_fct_##A, 1, data);\
+static uintptr_t my_GDestroyNotify_fct_##A = 0;                         \
+static void my_GDestroyNotify_##A(void* data)                           \
+{                                                                       \
+    RunFunctionFmt(my_GDestroyNotify_fct_##A, "p", data);   \
 }
 SUPER()
 #undef GO
@@ -58,10 +58,10 @@ static void* findGDestroyNotifyFct(void* fct)
 
 // GClosureNotify
 #define GO(A)   \
-static uintptr_t my_GClosureNotify_fct_##A = 0;   \
-static void my_GClosureNotify_##A(void* data, void* closure)     \
-{                                       \
-    RunFunction(my_context, my_GClosureNotify_fct_##A, 2, data, closure);\
+static uintptr_t my_GClosureNotify_fct_##A = 0;                                 \
+static void my_GClosureNotify_##A(void* data, void* closure)                    \
+{                                                                               \
+    RunFunctionFmt(my_GClosureNotify_fct_##A, "pp", data, closure); \
 }
 SUPER()
 #undef GO
@@ -81,10 +81,10 @@ static void* findGClosureNotifyFct(void* fct)
 
 // DBusGProxyCallNotify
 #define GO(A)   \
-static uintptr_t my_DBusGProxyCallNotify_fct_##A = 0;   \
-static void my_DBusGProxyCallNotify_##A(void* proxy, void* call_id, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusGProxyCallNotify_fct_##A, 3, proxy, call_id, data);\
+static uintptr_t my_DBusGProxyCallNotify_fct_##A = 0;                                           \
+static void my_DBusGProxyCallNotify_##A(void* proxy, void* call_id, void* data)                 \
+{                                                                                               \
+    RunFunctionFmt(my_DBusGProxyCallNotify_fct_##A, "ppp", proxy, call_id, data);   \
 }
 SUPER()
 #undef GO
@@ -104,10 +104,10 @@ static void* findDBusGProxyCallNotifyFct(void* fct)
 
 // GCallback
 #define GO(A)   \
-static uintptr_t my_GCallback_fct_##A = 0;   \
-static void my_GCallback_##A(void* a, void* b, void* c, void* d)     \
-{                                       \
-    RunFunction(my_context, my_GCallback_fct_##A, 4, a, b, c, d);\
+static uintptr_t my_GCallback_fct_##A = 0;                                  \
+static void my_GCallback_##A(void* a, void* b, void* c, void* d)            \
+{                                                                           \
+    RunFunctionFmt(my_GCallback_fct_##A, "pppp", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -127,10 +127,10 @@ static void* findGCallbackFct(void* fct)
 
 // DBusGTypeSpecializedCollectionIterator
 #define GO(A)   \
-static uintptr_t my_DBusGTypeSpecializedCollectionIterator_fct_##A = 0;                     \
-static void my_DBusGTypeSpecializedCollectionIterator_##A(void* a, void* b)                 \
-{                                                                                           \
-    RunFunction(my_context, my_DBusGTypeSpecializedCollectionIterator_fct_##A, 2, a, b);    \
+static uintptr_t my_DBusGTypeSpecializedCollectionIterator_fct_##A = 0;                         \
+static void my_DBusGTypeSpecializedCollectionIterator_##A(void* a, void* b)                     \
+{                                                                                               \
+    RunFunctionFmt(my_DBusGTypeSpecializedCollectionIterator_fct_##A, "pp", a, b);  \
 }
 SUPER()
 #undef GO
@@ -149,10 +149,10 @@ static void* findDBusGTypeSpecializedCollectionIteratorFct(void* fct)
 }
 // DBusGTypeSpecializedMapIterator
 #define GO(A)   \
-static uintptr_t my_DBusGTypeSpecializedMapIterator_fct_##A = 0;                        \
-static void my_DBusGTypeSpecializedMapIterator_##A(void* a, void* b, void* c)           \
-{                                                                                       \
-    RunFunction(my_context, my_DBusGTypeSpecializedMapIterator_fct_##A, 3, a, b, c);    \
+static uintptr_t my_DBusGTypeSpecializedMapIterator_fct_##A = 0;                            \
+static void my_DBusGTypeSpecializedMapIterator_##A(void* a, void* b, void* c)               \
+{                                                                                           \
+    RunFunctionFmt(my_DBusGTypeSpecializedMapIterator_fct_##A, "ppp", a, b, c); \
 }
 SUPER()
 #undef GO
@@ -173,16 +173,19 @@ static void* findDBusGTypeSpecializedMapIteratorFct(void* fct)
 
 EXPORT void my_dbus_g_type_collection_value_iterate(x86emu_t* emu, void* value, void* cb, void* data)
 {
+    (void)emu;
     my->dbus_g_type_collection_value_iterate(value, findDBusGTypeSpecializedCollectionIteratorFct(cb), data);
 }
 
 EXPORT void my_dbus_g_type_map_value_iterate(x86emu_t* emu, void* value, void* cb, void* data)
 {
+    (void)emu;
     my->dbus_g_type_map_value_iterate(value, findDBusGTypeSpecializedMapIteratorFct(cb), data);
 }
 
 EXPORT void* my_dbus_g_proxy_begin_call(x86emu_t* emu, void* proxy, void* method, void* notify, void* data, void* destroy, int first, int* next)
 {
+    (void)emu;
     int narg = 0;
     if(first)
         while(next[narg]) ++narg;
@@ -199,6 +202,7 @@ EXPORT void* my_dbus_g_proxy_begin_call(x86emu_t* emu, void* proxy, void* method
 
 EXPORT void* my_dbus_g_proxy_begin_call_with_timeout(x86emu_t* emu, void* proxy, void* method, void* notify, void* data, void* destroy, int timeout, int first, int* next)
 {
+    (void)emu;
     int narg = 0;
     if(first)
         while(next[narg]) ++narg;
@@ -215,11 +219,13 @@ EXPORT void* my_dbus_g_proxy_begin_call_with_timeout(x86emu_t* emu, void* proxy,
 
 EXPORT void my_dbus_g_proxy_connect_signal(x86emu_t* emu, void* proxy, void* name, void* handler, void* data, void* free_fnc)
 {
+    (void)emu;
     my->dbus_g_proxy_connect_signal(proxy, name, findGCallbackFct(handler), data, findGClosureNotifyFct(free_fnc));
 }
 
 EXPORT void my_dbus_g_proxy_disconnect_signal(x86emu_t* emu, void* proxy, void* name, void* handler, void* data)
 {
+    (void)emu;
     my->dbus_g_proxy_disconnect_signal(proxy, name, findGCallbackFct(handler), data);
 }
 
@@ -235,4 +241,3 @@ EXPORT void my_dbus_g_proxy_disconnect_signal(x86emu_t* emu, void* proxy, void* 
 
 
 #include "wrappedlib_init.h"
-

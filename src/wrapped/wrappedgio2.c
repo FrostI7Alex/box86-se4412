@@ -44,10 +44,10 @@ GO(3)
 
 // GAsyncReadyCallback
 #define GO(A)   \
-static uintptr_t my_GAsyncReadyCallback_fct_##A = 0;   \
-static void my_GAsyncReadyCallback_##A(void* source, void* res, void* data)     \
-{                                       \
-    RunFunction(my_context, my_GAsyncReadyCallback_fct_##A, 3, source, res, data);\
+static uintptr_t my_GAsyncReadyCallback_fct_##A = 0;                                        \
+static void my_GAsyncReadyCallback_##A(void* source, void* res, void* data)                 \
+{                                                                                           \
+    RunFunctionFmt(my_GAsyncReadyCallback_fct_##A, "ppp", source, res, data);   \
 }
 SUPER()
 #undef GO
@@ -67,10 +67,10 @@ static void* findGAsyncReadyCallbackFct(void* fct)
 
 // GDestroyNotify
 #define GO(A)   \
-static uintptr_t my_GDestroyNotify_fct_##A = 0;   \
-static void my_GDestroyNotify_##A(void* data)     \
-{                                       \
-    RunFunction(my_context, my_GDestroyNotify_fct_##A, 1, data);\
+static uintptr_t my_GDestroyNotify_fct_##A = 0;                         \
+static void my_GDestroyNotify_##A(void* data)                           \
+{                                                                       \
+    RunFunctionFmt(my_GDestroyNotify_fct_##A, "p", data);   \
 }
 SUPER()
 #undef GO
@@ -90,10 +90,10 @@ static void* findGDestroyNotifyFct(void* fct)
 
 // GDBusProxyTypeFunc
 #define GO(A)   \
-static uintptr_t my_GDBusProxyTypeFunc_fct_##A = 0;   \
-static int my_GDBusProxyTypeFunc_##A(void* manager, void* path, void* name, void* data)     \
-{                                       \
-    return (int)RunFunction(my_context, my_GDBusProxyTypeFunc_fct_##A, 4, manager, path, name, data);\
+static uintptr_t my_GDBusProxyTypeFunc_fct_##A = 0;                                                             \
+static int my_GDBusProxyTypeFunc_##A(void* manager, void* path, void* name, void* data)                         \
+{                                                                                                               \
+    return (int)RunFunctionFmt(my_GDBusProxyTypeFunc_fct_##A, "pppp", manager, path, name, data);   \
 }
 SUPER()
 #undef GO
@@ -113,10 +113,10 @@ static void* findGDBusProxyTypeFuncFct(void* fct)
 
 // GSimpleAsyncThreadFunc
 #define GO(A)   \
-static uintptr_t my_GSimpleAsyncThreadFunc_fct_##A = 0;   \
-static void my_GSimpleAsyncThreadFunc_##A(void* res, void* object, void* cancellable)     \
-{                                       \
-    RunFunction(my_context, my_GSimpleAsyncThreadFunc_fct_##A, 3, res, object, cancellable);\
+static uintptr_t my_GSimpleAsyncThreadFunc_fct_##A = 0;                                             \
+static void my_GSimpleAsyncThreadFunc_##A(void* res, void* object, void* cancellable)               \
+{                                                                                                   \
+    RunFunctionFmt(my_GSimpleAsyncThreadFunc_fct_##A, "ppp", res, object, cancellable); \
 }
 SUPER()
 #undef GO
@@ -136,10 +136,10 @@ static void* findGSimpleAsyncThreadFuncFct(void* fct)
 
 // GCallback
 #define GO(A)   \
-static uintptr_t my_GCallback_fct_##A = 0;   \
-static void my_GCallback_##A(void* a, void* b, void* c, void* d)     \
-{                                       \
-    RunFunction(my_context, my_GCallback_fct_##A, 4, a, b, c, d);\
+static uintptr_t my_GCallback_fct_##A = 0;                                  \
+static void my_GCallback_##A(void* a, void* b, void* c, void* d)            \
+{                                                                           \
+    RunFunctionFmt(my_GCallback_fct_##A, "pppp", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -159,10 +159,10 @@ static void* findGCallbackFct(void* fct)
 
 // GDBusSignalCallback
 #define GO(A)   \
-static uintptr_t my_GDBusSignalCallback_fct_##A = 0;   \
-static void my_GDBusSignalCallback_##A(void* connection, void* sender, void* object, void* interface, void* signal, void* param, void* data)     \
-{                                       \
-    RunFunction(my_context, my_GDBusSignalCallback_fct_##A, 7, connection, sender, object, interface, signal, param, data);\
+static uintptr_t my_GDBusSignalCallback_fct_##A = 0;                                                                                            \
+static void my_GDBusSignalCallback_##A(void* connection, void* sender, void* object, void* interface, void* signal, void* param, void* data)    \
+{                                                                                                                                               \
+    RunFunctionFmt(my_GDBusSignalCallback_fct_##A, "ppppppp", connection, sender, object, interface, signal, param, data);          \
 }
 SUPER()
 #undef GO
@@ -182,10 +182,10 @@ static void* findGDBusSignalCallbackFct(void* fct)
 
 // GDBusMessageFilterFunction
 #define GO(A)   \
-static uintptr_t my_GDBusMessageFilterFunction_fct_##A = 0;   \
-static void my_GDBusMessageFilterFunction_##A(void* connection, void* message, int incoming, void* data)     \
-{                                       \
-    RunFunction(my_context, my_GDBusMessageFilterFunction_fct_##A, 4, connection, message, incoming, data);\
+static uintptr_t my_GDBusMessageFilterFunction_fct_##A = 0;                                                         \
+static void my_GDBusMessageFilterFunction_##A(void* connection, void* message, int incoming, void* data)            \
+{                                                                                                                   \
+    RunFunctionFmt(my_GDBusMessageFilterFunction_fct_##A, "ppip", connection, message, incoming, data); \
 }
 SUPER()
 #undef GO
@@ -205,10 +205,10 @@ static void* findGDBusMessageFilterFunctionFct(void* fct)
 
 // GBusNameAppearedCallback
 #define GO(A)   \
-static uintptr_t my_GBusNameAppearedCallback_fct_##A = 0;   \
-static void my_GBusNameAppearedCallback_##A(void* connection, void* name, void* owner, void* data)  \
-{                                       \
-    RunFunction(my_context, my_GBusNameAppearedCallback_fct_##A, 4, connection, name, owner, data); \
+static uintptr_t my_GBusNameAppearedCallback_fct_##A = 0;                                                   \
+static void my_GBusNameAppearedCallback_##A(void* connection, void* name, void* owner, void* data)          \
+{                                                                                                           \
+    RunFunctionFmt(my_GBusNameAppearedCallback_fct_##A, "pppp", connection, name, owner, data); \
 }
 SUPER()
 #undef GO
@@ -228,10 +228,10 @@ static void* findGBusNameAppearedCallbackFct(void* fct)
 
 // GBusNameVanishedCallback
 #define GO(A)   \
-static uintptr_t my_GBusNameVanishedCallback_fct_##A = 0;   \
-static void my_GBusNameVanishedCallback_##A(void* connection, void* name, void* data)       \
-{                                       \
-    RunFunction(my_context, my_GBusNameVanishedCallback_fct_##A, 3, connection, name, data);\
+static uintptr_t my_GBusNameVanishedCallback_fct_##A = 0;                                           \
+static void my_GBusNameVanishedCallback_##A(void* connection, void* name, void* data)               \
+{                                                                                                   \
+    RunFunctionFmt(my_GBusNameVanishedCallback_fct_##A, "ppp", connection, name, data); \
 }
 SUPER()
 #undef GO
@@ -251,10 +251,10 @@ static void* findGBusNameVanishedCallbackFct(void* fct)
 
 // GBusAcquiredCallback
 #define GO(A)   \
-static uintptr_t my_GBusAcquiredCallback_fct_##A = 0;   \
-static void my_GBusAcquiredCallback_##A(void* connection, void* name, void* data)       \
-{                                       \
-    RunFunction(my_context, my_GBusAcquiredCallback_fct_##A, 3, connection, name, data);\
+static uintptr_t my_GBusAcquiredCallback_fct_##A = 0;                                           \
+static void my_GBusAcquiredCallback_##A(void* connection, void* name, void* data)               \
+{                                                                                               \
+    RunFunctionFmt(my_GBusAcquiredCallback_fct_##A, "ppp", connection, name, data); \
 }
 SUPER()
 #undef GO
@@ -274,10 +274,10 @@ static void* findGBusAcquiredCallbackFct(void* fct)
 
 // GBusNameAcquiredCallback
 #define GO(A)   \
-static uintptr_t my_GBusNameAcquiredCallback_fct_##A = 0;   \
-static void my_GBusNameAcquiredCallback_##A(void* connection, void* name, void* data)       \
-{                                       \
-    RunFunction(my_context, my_GBusNameAcquiredCallback_fct_##A, 3, connection, name, data);\
+static uintptr_t my_GBusNameAcquiredCallback_fct_##A = 0;                                           \
+static void my_GBusNameAcquiredCallback_##A(void* connection, void* name, void* data)               \
+{                                                                                                   \
+    RunFunctionFmt(my_GBusNameAcquiredCallback_fct_##A, "ppp", connection, name, data); \
 }
 SUPER()
 #undef GO
@@ -297,10 +297,10 @@ static void* findGBusNameAcquiredCallbackFct(void* fct)
 
 // GBusNameLostCallback
 #define GO(A)   \
-static uintptr_t my_GBusNameLostCallback_fct_##A = 0;   \
-static void my_GBusNameLostCallback_##A(void* connection, void* name, void* data)       \
-{                                       \
-    RunFunction(my_context, my_GBusNameLostCallback_fct_##A, 3, connection, name, data);\
+static uintptr_t my_GBusNameLostCallback_fct_##A = 0;                                           \
+static void my_GBusNameLostCallback_##A(void* connection, void* name, void* data)               \
+{                                                                                               \
+    RunFunctionFmt(my_GBusNameLostCallback_fct_##A, "ppp", connection, name, data); \
 }
 SUPER()
 #undef GO
@@ -333,17 +333,17 @@ SUPER()
 #undef GO
 // then the static functions callback that may be used with the structure, but dispatch also have a callback...
 #define GO(A)   \
-static uintptr_t fct_funcs_method_call_##A = 0;                   \
-static void my_funcs_method_call_##A(void* connection, void* sender, void* object_path, void* interface_name, void* method_name, void* invocation, void* user_data) {               \
-    RunFunction(my_context, fct_funcs_method_call_##A, 8, connection, sender, object_path, interface_name, method_name, invocation, user_data);                \
-}   \
-static uintptr_t fct_funcs_get_property_##A = 0;                        \
-static void* my_funcs_get_property_##A(void* connection, void* sender, void* object_path, void* interface_name, void* error, void* user_data) {                     \
-    return (void*)RunFunction(my_context, fct_funcs_get_property_##A, 7, connection, sender, object_path, interface_name, error, user_data);                        \
-}   \
-static uintptr_t fct_funcs_set_property_##A = 0;                        \
-static int my_funcs_set_property_##A(void* connection, void* sender, void* object_path, void* interface_name, void* value, void* error, void* user_data) {          \
-    return (int)RunFunction(my_context, fct_funcs_set_property_##A, 8, connection, sender, object_path, interface_name, value, error, user_data);                   \
+static uintptr_t fct_funcs_method_call_##A = 0; \
+static void my_funcs_method_call_##A(void* connection, void* sender, void* object_path, void* interface_name, void* method_name, void* parameters, void* invocation, void* user_data) { \
+    RunFunctionFmt(fct_funcs_method_call_##A, "pppppppp", connection, sender, object_path, interface_name, method_name, parameters, invocation, user_data); \
+} \
+static uintptr_t fct_funcs_get_property_##A = 0; \
+static void* my_funcs_get_property_##A(void* connection, void* sender, void* object_path, void* interface_name, void* property_name, void* error, void* user_data) { \
+    return (void*)RunFunctionFmt(fct_funcs_get_property_##A, "ppppppp", connection, sender, object_path, interface_name, property_name, error, user_data); \
+} \
+static uintptr_t fct_funcs_set_property_##A = 0; \
+static int my_funcs_set_property_##A(void* connection, void* sender, void* object_path, void* interface_name, void* property_name, void* value, void* error, void* user_data) { \
+    return (int)RunFunctionFmt(fct_funcs_set_property_##A, "pppppppp", connection, sender, object_path, interface_name, property_name, value, error, user_data); \
 }
 
 SUPER()
@@ -374,36 +374,43 @@ static my_GDBusInterfaceVTable_t* findFreeGDBusInterfaceVTable(my_GDBusInterface
 
 EXPORT void my_g_dbus_proxy_new(x86emu_t* emu, void* connection, int flags, void* info, void* name, void* path, void* interface, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_proxy_new(connection, flags, info, name, path, interface, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_proxy_new_for_bus(x86emu_t* emu, int bus_type, int flags, void* info, void* name, void* path, void* interface, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_proxy_new_for_bus(bus_type, flags, info, name, path, interface, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_proxy_call(x86emu_t* emu, void* proxy, void* name, void* param, int flags, int timeout, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_proxy_call(proxy, name, param, flags, timeout, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_proxy_call_with_unix_fd_list(x86emu_t* emu, void* proxy, void* name, void* param, int flags, int timeout, void* fd_list, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_proxy_call_with_unix_fd_list(proxy, name, param, flags, timeout, fd_list, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void* my_g_dbus_object_manager_client_new_for_bus_sync(x86emu_t* emu, int bus, int flags, void* name, void* path, void* cb, void* data, void* destroy, void* cancellable, void* error)
 {
+    (void)emu;
     return my->g_dbus_object_manager_client_new_for_bus_sync(bus, flags, name, path, findGDBusProxyTypeFuncFct(cb), data, findGDestroyNotifyFct(destroy), cancellable, error);
 }
 
 EXPORT void* my_g_simple_async_result_new(x86emu_t* emu, void* source, void* cb, void* data, void* tag)
 {
+    (void)emu;
     return my->g_simple_async_result_new(source, findGAsyncReadyCallbackFct(cb), data, tag);
 }
 
 EXPORT void* my_g_simple_async_result_new_error(x86emu_t* emu, void* source, void* cb, void* data, uint32_t domain, int code, void* fmt, va_list b)
 {
+    (void)emu;
     char* tmp;
     int dummy = vasprintf(&tmp, fmt, b);
     (void)dummy;
@@ -414,26 +421,31 @@ EXPORT void* my_g_simple_async_result_new_error(x86emu_t* emu, void* source, voi
 
 EXPORT void* my_g_simple_async_result_new_from_error(x86emu_t* emu, void* source, void* cb, void* data, void* error)
 {
+    (void)emu;
     return my->g_simple_async_result_new_from_error(source, findGAsyncReadyCallbackFct(cb), data, error);
 }
 
 EXPORT void* my_g_simple_async_result_new_take_error(x86emu_t* emu, void* source, void* cb, void* data, void* error)
 {
+    (void)emu;
     return my->g_simple_async_result_new_take_error(source, findGAsyncReadyCallbackFct(cb), data, error);
 }
 
 EXPORT void my_g_simple_async_result_set_op_res_gpointer(x86emu_t* emu, void* simple, void* op, void* notify)
 {
+    (void)emu;
     my->g_simple_async_result_set_op_res_gpointer(simple, op, findGDestroyNotifyFct(notify));
 }
 
 EXPORT void my_g_simple_async_result_run_in_thread(x86emu_t* emu, void* simple, void* fnc, int priority, void* cancellable)
 {
+    (void)emu;
     return my->g_simple_async_result_run_in_thread(simple, findGSimpleAsyncThreadFuncFct(fnc), priority, cancellable);
 }
 
 EXPORT void my_g_simple_async_report_error_in_idle(x86emu_t* emu, void* object, void* cb, void* data, uint32_t domain, int code, void* fmt, va_list b)
 {
+    (void)emu;
     char* tmp;
     int dummy = vasprintf(&tmp, fmt, b);
     (void)dummy;
@@ -443,26 +455,31 @@ EXPORT void my_g_simple_async_report_error_in_idle(x86emu_t* emu, void* object, 
 
 EXPORT void my_g_simple_async_report_gerror_in_idle(x86emu_t* emu, void* object, void* cb, void* data, void* error)
 {
+    (void)emu;
     my->g_simple_async_report_gerror_in_idle(object, findGAsyncReadyCallbackFct(cb), data, error);
 }
 
 EXPORT void my_g_simple_async_report_take_gerror_in_idle(x86emu_t* emu, void* object, void* cb, void* data, void* error)
 {
+    (void)emu;
     my->g_simple_async_report_take_gerror_in_idle(object, findGAsyncReadyCallbackFct(cb), data, error);
 }
 
 EXPORT unsigned long my_g_cancellable_connect(x86emu_t* emu, void* cancellable, void* cb, void* data, void* notify)
 {
+    (void)emu;
     return my->g_cancellable_connect(cancellable, findGCallbackFct(cb), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT void my_g_async_initable_init_async(x86emu_t* emu, void* initable, int priority, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_async_initable_init_async(initable, priority, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_async_initable_new_valist_async(x86emu_t* emu, int type, void* first, void* var_args, int priority, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_async_initable_new_valist_async(type, first, var_args, priority, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
@@ -473,90 +490,107 @@ EXPORT void my_g_async_initable_new_async(x86emu_t* emu, int type, int priority,
 
 EXPORT void my_g_async_initable_newv_async(x86emu_t* emu, int type, uint32_t n, void* params, int priority, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_async_initable_newv_async(type, n, params, priority, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_bus_get(x86emu_t* emu, int type, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_bus_get(type, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_connection_new(x86emu_t* emu, void* stream, void* guid, int flags, void* observer, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_connection_new(stream, guid, flags, observer, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_connection_new_for_address(x86emu_t* emu, void* address, int flags, void* observer, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_connection_new_for_address(address, flags, observer, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_connection_close(x86emu_t* emu, void* connection, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_connection_close(connection, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_connection_flush(x86emu_t* emu, void* connection, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_connection_flush(connection, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT void my_g_dbus_connection_call(x86emu_t* emu, void* connection, void* bus, void* object, void* interface, void* method, void* param, void* reply, int flags, int timeout, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_connection_call(connection, bus, object, interface, method, param, reply, flags, timeout, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT uint32_t my_g_dbus_connection_signal_subscribe(x86emu_t* emu, void* connection, void* sender, void* interface, void* member, void* object, void* arg0, int flags, void* cb, void* data, void* notify)
 {
+    (void)emu;
     return my->g_dbus_connection_signal_subscribe(connection, sender, interface, member, object, arg0, flags, findGDBusSignalCallbackFct(cb), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT void my_g_dbus_connection_send_message_with_reply(x86emu_t* emu, void* connection, void* message, int flags, int timeout, void* serial, void* cancellable, void* cb, void* data)
 {
+    (void)emu;
     my->g_dbus_connection_send_message_with_reply(connection, message, flags, timeout, serial, cancellable, findGAsyncReadyCallbackFct(cb), data);
 }
 
 EXPORT uint32_t my_g_dbus_connection_add_filter(x86emu_t* emu, void* connection, void* cb, void* data, void* notify)
 {
+    (void)emu;
     return my->g_dbus_connection_add_filter(connection, findGDBusMessageFilterFunctionFct(cb), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT uint32_t my_g_dbus_connection_register_object(x86emu_t* emu, void* connection, void* object, void* info, my_GDBusInterfaceVTable_t* vtable, void* data, void* notify, void* error)
 {
+    (void)emu;
     return my->g_dbus_connection_register_object(connection, object, info, findFreeGDBusInterfaceVTable(vtable), data, findGDestroyNotifyFct(notify), error);
 }
 
 EXPORT uint32_t my_g_bus_watch_name(x86emu_t* emu, int type, void* name, int flags, void* appeared, void* vanished, void* data, void* notify)
 {
+    (void)emu;
     // note that a mecanism with a new callback, cleaned with notify, is also possible here
     return my->g_bus_watch_name(type, name, flags, findGBusNameAppearedCallbackFct(appeared), findGBusNameVanishedCallbackFct(vanished), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT uint32_t my_g_bus_watch_name_on_connection(x86emu_t* emu, void* connection, void* name, int flags, void* appeared, void* vanished, void* data, void* notify)
 {
+    (void)emu;
     // note that a mecanism with a new callback, cleaned with notify, is also possible here
     return my->g_bus_watch_name_on_connection(connection, name, flags, findGBusNameAppearedCallbackFct(appeared), findGBusNameVanishedCallbackFct(vanished), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT uint32_t my_g_bus_own_name(x86emu_t* emu, int type, void* name, int flags, void* bus_acquired, void* name_acquired, void* name_lost, void* data, void* notify)
 {
+    (void)emu;
     // note that a mecanism with a new callback, cleaned with notify, is also possible here
     return my->g_bus_own_name(type, name, flags, findGBusAcquiredCallbackFct(bus_acquired), findGBusNameAcquiredCallbackFct(name_acquired), findGBusNameLostCallbackFct(name_lost), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT uint32_t my_g_bus_own_name_on_connection(x86emu_t* emu, void* connection, void* name, int flags, void* name_acquired, void* name_lost, void* data, void* notify)
 {
+    (void)emu;
     // note that a mecanism with a new callback, cleaned with notify, is also possible here
     return my->g_bus_own_name_on_connection(connection, name, flags, findGBusNameAcquiredCallbackFct(name_acquired), findGBusNameLostCallbackFct(name_lost), data, findGDestroyNotifyFct(notify));
 }
 
 EXPORT void* my_g_initable_new(x86emu_t* emu, int type, void* cancellable, void* error, void* first, void* va)
 {
+    (void)emu;
     return my->g_initable_new_valist(type, first, va, cancellable, error);
 }
 
 EXPORT void* my_g_memory_input_stream_new_from_data(x86emu_t* emu, void* data, ssize_t size, void* d)
 {
+    (void)emu;
     return my->g_memory_input_stream_new_from_data(data, size, findGDestroyNotifyFct(d));
 }
 

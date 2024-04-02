@@ -44,7 +44,7 @@ GO(9)   \
 static uintptr_t my_glu_callback_fct_##A = 0;                       \
 static void my_glu_callback_##A(void* a, void* b)                   \
 {                                                                   \
-    RunFunction(my_context, my_glu_callback_fct_##A, 2, a, b);  \
+    RunFunctionFmt(my_glu_callback_fct_##A, "pp", a, b);\
 }
 SUPER()
 #undef GO
@@ -63,10 +63,10 @@ static void* findglu_callbackFct(void* fct)
 }
 // glu_callback4
 #define GO(A)   \
-static uintptr_t my_glu_callback4_fct_##A = 0;                              \
-static void my_glu_callback4_##A(void* a, void* b, void* c, void* d)        \
-{                                                                           \
-    RunFunction(my_context, my_glu_callback4_fct_##A, 4, a, b, c, d);   \
+static uintptr_t my_glu_callback4_fct_##A = 0;                                  \
+static void my_glu_callback4_##A(void* a, void* b, void* c, void* d)            \
+{                                                                               \
+    RunFunctionFmt(my_glu_callback4_fct_##A, "pppp", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -85,10 +85,10 @@ static void* findglu_callback4Fct(void* fct)
 }
 // glu_callback5
 #define GO(A)   \
-static uintptr_t my_glu_callback5_fct_##A = 0;                                  \
-static void my_glu_callback5_##A(void* a, void* b, void* c, void* d, void* e)   \
-{                                                                               \
-    RunFunction(my_context, my_glu_callback5_fct_##A, 5, a, b, c, d, e);    \
+static uintptr_t my_glu_callback5_fct_##A = 0;                                      \
+static void my_glu_callback5_##A(void* a, void* b, void* c, void* d, void* e)       \
+{                                                                                   \
+    RunFunctionFmt(my_glu_callback5_fct_##A, "ppppp", a, b, c, d, e);   \
 }
 SUPER()
 #undef GO
@@ -114,10 +114,12 @@ static void* findglu_callback5Fct(void* fct)
 #define GLU_TESS_COMBINE_DATA              100111
 void EXPORT my_gluQuadricCallback(x86emu_t* emu, void* a, int32_t b, void* cb)
 {
+    (void)emu;
     my->gluQuadricCallback(a, b, findglu_callbackFct(cb));
 }
 void EXPORT my_gluTessCallback(x86emu_t* emu, void* a, int32_t b, void* cb)
 {
+    (void)emu;
     if(b==GLU_TESS_COMBINE)
         my->gluTessCallback(a, b, findglu_callback4Fct(cb));
     else if(b==GLU_TESS_COMBINE_DATA)
@@ -127,6 +129,7 @@ void EXPORT my_gluTessCallback(x86emu_t* emu, void* a, int32_t b, void* cb)
 }
 void EXPORT my_gluNurbsCallback(x86emu_t* emu, void* a, int32_t b, void* cb)
 {
+    (void)emu;
     my->gluNurbsCallback(a, b, findglu_callbackFct(cb));
 }
 

@@ -34,10 +34,10 @@ GO(4)
 
 // EffectFunc
 #define GO(A)   \
-static uintptr_t my_EffectFunc_fct_##A = 0;                                         \
-static void my_EffectFunc_##A(int chan, void *stream, int len, void *udata)         \
-{                                                                                   \
-    RunFunction(my_context, my_EffectFunc_fct_##A, 4, chan, stream, len, udata);    \
+static uintptr_t my_EffectFunc_fct_##A = 0;                                             \
+static void my_EffectFunc_##A(int chan, void *stream, int len, void *udata)             \
+{                                                                                       \
+    RunFunctionFmt(my_EffectFunc_fct_##A, "ipip", chan, stream, len, udata);\
 }
 SUPER()
 #undef GO
@@ -58,10 +58,10 @@ static void* find_EffectFunc_Fct(void* fct)
 
 // EffectDone
 #define GO(A)   \
-static uintptr_t my_EffectDone_fct_##A = 0;                         \
-static void my_EffectDone_##A(int chan, void *udata)                \
-{                                                                   \
-    RunFunction(my_context, my_EffectDone_fct_##A, 2, chan, udata); \
+static uintptr_t my_EffectDone_fct_##A = 0;                                 \
+static void my_EffectDone_##A(int chan, void *udata)                        \
+{                                                                           \
+    RunFunctionFmt(my_EffectDone_fct_##A, "ip", chan, udata);   \
 }
 SUPER()
 #undef GO
@@ -82,10 +82,10 @@ static void* find_EffectDone_Fct(void* fct)
 
 // MixFunc
 #define GO(A)   \
-static uintptr_t my_MixFunc_fct_##A = 0;                                \
-static void my_MixFunc_##A(void *udata, uint8_t *stream, int len)       \
-{                                                                       \
-    RunFunction(my_context, my_MixFunc_fct_##A, 3, udata, stream, len); \
+static uintptr_t my_MixFunc_fct_##A = 0;                                        \
+static void my_MixFunc_##A(void *udata, uint8_t *stream, int len)               \
+{                                                                               \
+    RunFunctionFmt(my_MixFunc_fct_##A, "ppi", udata, stream, len);  \
 }
 SUPER()
 #undef GO
@@ -106,10 +106,10 @@ static void* find_MixFunc_Fct(void* fct)
 
 // ChannelFinished
 #define GO(A)   \
-static uintptr_t my_ChannelFinished_fct_##A = 0;                        \
-static void my_ChannelFinished_##A(int channel)                         \
-{                                                                       \
-    RunFunction(my_context, my_ChannelFinished_fct_##A, 1, channel);    \
+static uintptr_t my_ChannelFinished_fct_##A = 0;                            \
+static void my_ChannelFinished_##A(int channel)                             \
+{                                                                           \
+    RunFunctionFmt(my_ChannelFinished_fct_##A, "i", channel);   \
 }
 SUPER()
 #undef GO
@@ -130,10 +130,10 @@ static void* find_ChannelFinished_Fct(void* fct)
 
 // MusicFinished
 #define GO(A)   \
-static uintptr_t my_MusicFinished_fct_##A = 0;              \
-static void my_MusicFinished_##A()                          \
-{                                                           \
-    RunFunction(my_context, my_MusicFinished_fct_##A, 0);   \
+static uintptr_t my_MusicFinished_fct_##A = 0;                  \
+static void my_MusicFinished_##A()                              \
+{                                                               \
+    RunFunctionFmt(my_MusicFinished_fct_##A, "");   \
 }
 SUPER()
 #undef GO
@@ -153,11 +153,6 @@ static void* find_MusicFinished_Fct(void* fct)
 }
 
 #undef SUPER
-
-static void freeSDL1MixerMy(library_t* lib)
-{
-    //sdl1mixer_my_t *my = lib->priv.w.p2;
-}
 
 EXPORT void* my_Mix_LoadMUSType_RW(x86emu_t* emu, void* a, int32_t b, int32_t c)
 {
@@ -185,31 +180,37 @@ EXPORT void* my_Mix_LoadWAV_RW(x86emu_t* emu, void* a, int32_t b)
 
 EXPORT void my_Mix_SetPostMix(x86emu_t* emu, void* a, void* b)
 {
+    (void)emu;
     my->Mix_SetPostMix(find_MixFunc_Fct(a), b);
 }
 
 EXPORT void my_Mix_ChannelFinished(x86emu_t* emu, void* cb)
 {
+    (void)emu;
     my->Mix_ChannelFinished(find_ChannelFinished_Fct(cb));
 }
 
 EXPORT void my_Mix_HookMusic(x86emu_t* emu, void* f, void* arg)
 {
+    (void)emu;
     my->Mix_HookMusic(find_MixFunc_Fct(f), arg);
 }
 
 EXPORT void my_Mix_HookMusicFinished(x86emu_t* emu, void* f)
 {
+    (void)emu;
     my->Mix_HookMusicFinished(find_MusicFinished_Fct(f));
 }
 
 EXPORT int my_Mix_RegisterEffect(x86emu_t* emu, int chan, void* f, void* d, void *arg)
 {
+    (void)emu;
     return my->Mix_RegisterEffect(chan, find_EffectFunc_Fct(f), find_EffectDone_Fct(d), arg);
 }
 
 EXPORT int my_Mix_UnregisterEffect(x86emu_t* emu, int channel, void* f)
 {
+    (void)emu;
     return my->Mix_UnregisterEffect(channel, find_EffectFunc_Fct(f));
 }
 
@@ -222,4 +223,3 @@ EXPORT int my_Mix_UnregisterEffect(x86emu_t* emu, int channel, void* f)
     my_context->sdl1mixerlib = NULL;
 
 #include "wrappedlib_init.h"
-

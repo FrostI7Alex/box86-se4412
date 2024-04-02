@@ -48,6 +48,9 @@ brick_t* NewBrick(void* old)
     if(ptr == MAP_FAILED) {
         printf_log(LOG_NONE, "Warning, cannot allocate 0x%x aligned bytes for bridge, will probably crash later\n", NBRICK*sizeof(onebridge_t));
     }
+    #ifdef DYNAREC
+    setProtection((uintptr_t)ptr, NBRICK * sizeof(onebridge_t), PROT_READ | PROT_WRITE | PROT_EXEC | PROT_NOPROT);
+    #endif
     dynarec_log(LOG_INFO, "New Bridge brick at %p (size 0x%x)\n", ptr, NBRICK*sizeof(onebridge_t));
     ret->b = ptr;
     return ret;
@@ -73,10 +76,6 @@ void FreeBridge(bridge_t** bridge)
     brick_t *b = br->head;
     while(b) {
         brick_t *n = b->next;
-        #ifdef DYNAREC
-        if(getProtection((uintptr_t)b->b)&(PROT_DYNAREC|PROT_DYNAREC_R))
-            unprotectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t), 0);
-        #endif
         my_munmap(NULL, b->b, NBRICK*sizeof(onebridge_t));
         box_free(b);
         b = n;
@@ -94,44 +93,28 @@ uintptr_t AddBridge(bridge_t* bridge, wrapper_t w, void* fnc, int N, const char*
     if(!bridge) return 0;
     brick_t *b = NULL;
     int sz = -1;
-    #ifdef DYNAREC
-    int prot = 0;
-    do {
-        #endif
-        pthread_mutex_lock(&my_context->mutex_bridge);
-        b = bridge->last;
-        if(b->sz == NBRICK) {
-            b->next = NewBrick(b->b);
-            b = b->next;
-            bridge->last = b;
-        }
-        sz = b->sz;
-        #ifdef DYNAREC
-        pthread_mutex_unlock(&my_context->mutex_bridge);
-        if(box86_dynarec) {
-            prot=(getProtection((uintptr_t)&b->b[sz])&(PROT_DYNAREC|PROT_DYNAREC_R))?1:0;
-            if(prot)
-                unprotectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t), 0);    // don't mark blocks, it's only new one
-        }
-    } while(sz!=b->sz); // this while loop if someone took the slot when the bridge mutex was unlocked doing memory protection managment
-    pthread_mutex_lock(&my_context->mutex_bridge);
-    #endif
+    int ret;
+
+    mutex_lock(&my_context->mutex_bridge);
+    b = bridge->last;
+    if(b->sz == NBRICK) {
+        b->next = NewBrick(b->b);
+        b = b->next;
+        bridge->last = b;
+    }
+    sz = b->sz;
     b->sz++;
+    // add bridge to map, for fast recovery
+    khint_t k = kh_put(bridgemap, bridge->bridgemap, (uintptr_t)fnc, &ret);
+    kh_value(bridge->bridgemap, k) = (uintptr_t)&b->b[sz].CC;
+    mutex_unlock(&my_context->mutex_bridge);
+
     b->b[sz].CC = 0xCC;
     b->b[sz].S = 'S'; b->b[sz].C='C';
     b->b[sz].w = w;
     b->b[sz].f = (uintptr_t)fnc;
     b->b[sz].C3 = N?0xC2:0xC3;
     b->b[sz].N = N;
-    // add bridge to map, for fast recovery
-    int ret;
-    khint_t k = kh_put(bridgemap, bridge->bridgemap, (uintptr_t)fnc, &ret);
-    kh_value(bridge->bridgemap, k) = (uintptr_t)&b->b[sz].CC;
-    pthread_mutex_unlock(&my_context->mutex_bridge);
-    #ifdef DYNAREC
-    if(box86_dynarec)
-        protectDB((uintptr_t)b->b, NBRICK*sizeof(onebridge_t));
-    #endif
     #ifdef HAVE_TRACE
     if(name)
         addBridgeName(fnc, name);
@@ -149,6 +132,14 @@ uintptr_t CheckBridged(bridge_t* bridge, void* fnc)
     return kh_value(bridge->bridgemap, k);
 }
 
+int IsBridge(void* fnc) {
+    onebridge_t *b = (onebridge_t*)fnc;
+    if(!b || b->CC != 0xCC || b->S!='S' || b->C!='C' || (b->C3!=0xC3 && b->C3!=0xC2)) {
+        return 0;
+    }
+    return 1;
+}
+
 uintptr_t AddCheckBridge(bridge_t* bridge, wrapper_t w, void* fnc, int N, const char* name)
 {
     if(!fnc && w)
@@ -159,20 +150,22 @@ uintptr_t AddCheckBridge(bridge_t* bridge, wrapper_t w, void* fnc, int N, const 
     return ret;
 }
 
-uintptr_t AddAutomaticBridge(x86emu_t* emu, bridge_t* bridge, wrapper_t w, void* fnc, int N)
+uintptr_t AddAutomaticBridge(x86emu_t* emu, bridge_t* bridge, wrapper_t w, void* fnc, int N, const char* name)
 {
     if(!fnc)
         return 0;
     uintptr_t ret = CheckBridged(bridge, fnc);
     if(!ret)
-        ret = AddBridge(bridge, w, fnc, N, NULL);
+        ret = AddBridge(bridge, w, fnc, N, name);
     if(!hasAlternate(fnc)) {
         printf_log(LOG_DEBUG, "Adding AutomaticBridge for %p to %p\n", fnc, (void*)ret);
         addAlternate(fnc, (void*)ret);
-        #ifdef DYNAREC
+#ifdef DYNAREC
         // now, check if dynablock at native address exist
         DBAlternateBlock(emu, (uintptr_t)fnc, ret);
-        #endif
+#else
+        (void)emu;
+#endif
     }
     return ret;
 }
@@ -203,18 +196,19 @@ void* GetNativeFnc(uintptr_t fnc)
     #undef PK
     #undef PK32
     // check if bridge exist
-    onebridge_t *b = (onebridge_t*)fnc;
-    if(b->CC != 0xCC || b->S!='S' || b->C!='C' || (b->C3!=0xC3 && b->C3!=0xC2))
-        return NULL;    // not a bridge?!
-    return (void*)b->f;
+    if (IsBridge((void*)fnc)) {
+        return (void*)((onebridge_t*)fnc)->f;
+    }
+    return NULL;
 }
 
 void* GetNativeFncOrFnc(uintptr_t fnc)
 {
-    onebridge_t *b = (onebridge_t*)fnc;
-    if(b->CC != 0xCC || b->S!='S' || b->C!='C' || (b->C3!=0xC3 && b->C3!=0xC2))
-        return (void*)fnc;    // not a bridge?!
-    return (void*)b->f;
+    if (IsBridge((void*)fnc)) {
+        return (void*)((onebridge_t*)fnc)->f;
+    } else {
+        return (void*)fnc;
+    }
 }
 
 #ifdef HAVE_TRACE

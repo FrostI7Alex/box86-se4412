@@ -43,7 +43,7 @@ int FindSection(Elf32_Shdr *s, int n, char* SHStrTab, const char* name)
     return 0;
 }
 
-void LoadNamedSection(FILE *f, Elf32_Shdr *s, int size, char* SHStrTab, const char* name, const char* clearname, uint32_t type, void** what, int* num)
+void LoadNamedSection(FILE *f, Elf32_Shdr *s, int size, char* SHStrTab, const char* name, const char* clearname, uint32_t type, void** what, uint32_t* num)
 {
     int n = FindSection(s, size, SHStrTab, name);
     printf_dump(LOG_DEBUG, "Loading %s (idx = %d)\n", clearname, n);
@@ -136,7 +136,7 @@ elfheader_t* ParseElfHeader(FILE* f, const char* name, int exec)
             h->numSHEntries = section.sh_size;
         }
         // now read all section headers
-        printf_dump(LOG_DEBUG, "Read %d Section header\n", h->numSHEntries);
+        printf_dump(LOG_DEBUG, "Read %u Section header\n", h->numSHEntries);
         h->SHEntries = (Elf32_Shdr*)box_calloc(h->numSHEntries, sizeof(Elf32_Shdr));
         fseeko64(f, header.e_shoff ,SEEK_SET);
         if(fread(h->SHEntries, sizeof(Elf32_Shdr), h->numSHEntries, f)!=h->numSHEntries) {
@@ -188,7 +188,7 @@ elfheader_t* ParseElfHeader(FILE* f, const char* name, int exec)
         // grab DT_REL & DT_RELA stuffs
         // also grab the DT_STRTAB string table
         {
-            for (int i=0; i<h->numDynamic; ++i) {
+            for (uint32_t i=0; i<h->numDynamic; ++i) {
                 Elf32_Dyn d = h->Dynamic[i];
                 Elf32_Word val = d.d_un.d_val;
                 Elf32_Addr ptr = d.d_un.d_ptr;
@@ -242,8 +242,10 @@ elfheader_t* ParseElfHeader(FILE* f, const char* name, int exec)
                     printf_dump(LOG_DEBUG, "The DT_INIT_ARRAYSZ is %d\n", h->initarray_sz);
                     break;
                 case DT_PREINIT_ARRAYSZ:
-                    if(val)
-                        printf_dump(LOG_NONE, "Warning, PreInit Array (size=%d) present and ignored!\n", val);
+                    #ifndef ANDROID
+                        if(val)
+                            printf_dump(LOG_NONE, "Warning, PreInit Array (size=%d) present and ignored!\n", val);
+                    #endif
                     break;
                 case DT_FINI: // Exit hook
                     h->finientry = ptr;
@@ -272,6 +274,10 @@ elfheader_t* ParseElfHeader(FILE* f, const char* name, int exec)
                 case DT_VERDEF:
                     h->VerDef = (Elf32_Verdef*)ptr;
                     printf_dump(LOG_DEBUG, "The DT_VERDEF is at address %p\n", h->VerDef);
+                    break;
+                case DT_FLAGS:
+                    h->flags = val;
+                    printf_dump(LOG_DEBUG, "The DT_FLAGS is 0x%x\n", h->flags);
                     break;
                 }
             }
@@ -351,6 +357,17 @@ elfheader_t* ParseElfHeader(FILE* f, const char* name, int exec)
             h->bsssz = h->SHEntries[ii].sh_size;
             printf_dump(LOG_DEBUG, "The .bss is at address %p, and is %d big\n", (void*)h->bss, h->bsssz);
         }
+        ii = FindSection(h->SHEntries, h->numSHEntries, h->SHStrTab, ".eh_frame");
+        if(ii) {
+            h->ehframe = (uintptr_t)(h->SHEntries[ii].sh_addr);
+            h->ehframe_end = h->ehframe + h->SHEntries[ii].sh_size;
+            printf_dump(LOG_DEBUG, "The .eh_frame section is at address %p..%p\n", (void*)h->ehframe, (void*)h->ehframe_end);
+        }
+        ii = FindSection(h->SHEntries, h->numSHEntries, h->SHStrTab, ".eh_frame_hdr");
+        if(ii) {
+            h->ehframehdr = (uintptr_t)(h->SHEntries[ii].sh_addr);
+            printf_dump(LOG_DEBUG, "The .eh_frame_hdr section is at address %p\n", (void*)h->ehframehdr);
+        }
 
         LoadNamedSection(f, h->SHEntries, h->numSHEntries, h->SHStrTab, ".dynstr", "DynSym Strings", SHT_STRTAB, (void**)&h->DynStr, NULL);
         LoadNamedSection(f, h->SHEntries, h->numSHEntries, h->SHStrTab, ".dynsym", "DynSym", SHT_DYNSYM, (void**)&h->DynSym, &h->numDynSym);
@@ -398,4 +415,75 @@ const char* GetParentSymbolVersion(elfheader_t* h, int index)
         def = def->vd_next?((Elf32_Verdef*)((uintptr_t)def + def->vd_next)):NULL;
     }
     return NULL;
+}
+
+int GetVersionIndice(elfheader_t* h, const char* vername)
+{
+    if(!vername)
+        return 0;
+    if(h->VerDef) {
+        Elf32_Verdef *def = (Elf32_Verdef*)((uintptr_t)h->VerDef + h->delta);
+        while(def) {
+            Elf32_Verdaux *aux = (Elf32_Verdaux*)((uintptr_t)def + def->vd_aux);
+            if(!strcmp(h->DynStr+aux->vda_name, vername))
+                return def->vd_ndx;
+            def = def->vd_next?((Elf32_Verdef*)((uintptr_t)def + def->vd_next)):NULL;
+        }
+    }
+    return 0;
+}
+
+int GetNeededVersionCnt(elfheader_t* h, const char* libname)
+{
+    if(!libname)
+        return 0;
+    if(h->VerNeed) {
+        Elf32_Verneed *ver = (Elf32_Verneed*)((uintptr_t)h->VerNeed + h->delta);
+        while(ver) {
+            char *filename = h->DynStr + ver->vn_file;
+            Elf32_Vernaux *aux = (Elf32_Vernaux*)((uintptr_t)ver + ver->vn_aux);
+            if(!strcmp(filename, libname))
+                return ver->vn_cnt;
+            ver = ver->vn_next?((Elf32_Verneed*)((uintptr_t)ver + ver->vn_next)):NULL;
+        }
+    }
+    return 0;
+}
+
+const char* GetNeededVersionString(elfheader_t* h, const char* libname, int idx)
+{
+    if(!libname)
+        return 0;
+    if(h->VerNeed) {
+        Elf32_Verneed *ver = (Elf32_Verneed*)((uintptr_t)h->VerNeed + h->delta);
+        while(ver) {
+            char *filename = h->DynStr + ver->vn_file;
+            Elf32_Vernaux *aux = (Elf32_Vernaux*)((uintptr_t)ver + ver->vn_aux);
+            if(!strcmp(filename, libname)) {
+                for(int j=0; j<ver->vn_cnt; ++j) {
+                    if(j==idx) 
+                        return h->DynStr+aux->vna_name;
+                    aux = (Elf32_Vernaux*)((uintptr_t)aux + aux->vna_next);
+                }
+                return NULL;    // idx out of bound, return NULL...
+           }
+            ver = ver->vn_next?((Elf32_Verneed*)((uintptr_t)ver + ver->vn_next)):NULL;
+        }
+    }
+    return NULL;
+}
+
+int GetNeededVersionForLib(elfheader_t* h, const char* libname, const char* ver)
+{
+    if(!libname || !ver)
+        return 0;
+    int n = GetNeededVersionCnt(h, libname);
+    if(!n)
+        return 0;
+    for(int i=0; i<n; ++i) {
+        const char* vername = GetNeededVersionString(h, libname, i);
+        if(vername && !strcmp(ver, vername))
+            return 1;
+    }
+    return 0;
 }

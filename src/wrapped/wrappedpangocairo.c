@@ -44,10 +44,10 @@ GO(4)
 
 // ShapeRenderer ...
 #define GO(A)   \
-static uintptr_t my_ShapeRenderer_fct_##A = 0;                          \
-static void my_ShapeRenderer_##A(void* a, void* b, int c, void* d)      \
-{                                                                       \
-    RunFunction(my_context, my_ShapeRenderer_fct_##A, 4, a, b, c, d);   \
+static uintptr_t my_ShapeRenderer_fct_##A = 0;                                  \
+static void my_ShapeRenderer_##A(void* a, void* b, int c, void* d)              \
+{                                                                               \
+    RunFunctionFmt(my_ShapeRenderer_fct_##A, "ppip", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -72,14 +72,14 @@ static void* reverse_ShapeRenderer_Fct(void* fct)
     #define GO(A) if(my_ShapeRenderer_##A == fct) return (void*)my_ShapeRenderer_fct_##A;
     SUPER()
     #undef GO
-    return (void*)AddBridge(my_lib->w.bridge, iFp, fct, 0, NULL);
+    return (void*)AddBridge(my_lib->w.bridge, vFppip, fct, 0, NULL);
 }
 // GDestroyNotify
 #define GO(A)   \
-static uintptr_t my_GDestroyNotify_fct_##A = 0;   \
-static void my_GDestroyNotify_##A(void* data)     \
-{                                       \
-    RunFunction(my_context, my_GDestroyNotify_fct_##A, 1, data);\
+static uintptr_t my_GDestroyNotify_fct_##A = 0;                         \
+static void my_GDestroyNotify_##A(void* data)                           \
+{                                                                       \
+    RunFunctionFmt(my_GDestroyNotify_fct_##A, "p", data);   \
 }
 SUPER()
 #undef GO
@@ -101,11 +101,13 @@ static void* findGDestroyNotifyFct(void* fct)
 
 EXPORT void* my_pango_cairo_context_get_shape_renderer(x86emu_t* emu, void* ctx, void* p)
 {
+    (void)emu;
     return reverse_ShapeRenderer_Fct(my->pango_cairo_context_get_shape_renderer(ctx, p));
 }
 
 EXPORT void my_pango_cairo_context_set_shape_renderer(x86emu_t* emu, void* ctx, void* f, void* p, void* d)
 {
+    (void)emu;
     my->pango_cairo_context_set_shape_renderer(ctx, find_ShapeRenderer_Fct(f), p, findGDestroyNotifyFct(d));
 }
 

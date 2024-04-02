@@ -484,10 +484,8 @@ uint8_t rcl8(x86emu_t *emu, uint8_t d, uint8_t s)
 		CONDITIONAL_SET_FLAG(cf, F_CF);
         /* OVERFLOW is set *IFF* cnt==1, then it is the 
            xor of CF and the most significant bit.  Blecck. */
-        /* parenthesized this expression since it appears to
-           be causing OF to be misset */
-        CONDITIONAL_SET_FLAG(cnt == 1 && XOR2(cf + ((res >> 6) & 0x2)),
-							 F_OF);
+		if(cnt == 1)
+        	CONDITIONAL_SET_FLAG((cf ^ (res >> 7)) & 0x1, F_OF);
 
     }
 	return (uint8_t)res;
@@ -513,8 +511,8 @@ uint16_t rcl16(x86emu_t *emu, uint16_t d, uint8_t s)
 			res |= 1 << (cnt - 1);
 		}
 		CONDITIONAL_SET_FLAG(cf, F_CF);
-		CONDITIONAL_SET_FLAG(cnt == 1 && XOR2(cf + ((res >> 14) & 0x2)),
-							 F_OF);
+		if(cnt == 1)
+        	CONDITIONAL_SET_FLAG((cf ^ (res >> 15)) & 0x1, F_OF);
 	}
 	return (uint16_t)res;
 }
@@ -539,8 +537,8 @@ uint32_t rcl32(x86emu_t *emu, uint32_t d, uint8_t s)
 			res |= 1 << (cnt - 1);
 		}
 		CONDITIONAL_SET_FLAG(cf, F_CF);
-		CONDITIONAL_SET_FLAG(cnt == 1 && XOR2(cf + ((res >> 30) & 0x2)),
-							 F_OF);
+		if(cnt == 1)
+        	CONDITIONAL_SET_FLAG((cf ^ (res >> 31)) & 0x1, F_OF);
 	}
 	return res;
 }
@@ -592,6 +590,11 @@ uint8_t rcr8(x86emu_t *emu, uint8_t d, uint8_t s)
                (i.e. packed bit array or unpacked.)
              */
 			ocf = ACCESS_FLAG(F_CF) != 0;
+			/* OVERFLOW is set *IFF* cnt==1, then it is the 
+			xor of CF and the most significant bit.  Blecck. */
+			/* parenthesized... */
+			CONDITIONAL_SET_FLAG((ocf ^ (d >> 7)) & 0x1,
+								 F_OF);
         } else
             cf = (d >> (cnt - 1)) & 0x1;
 
@@ -620,13 +623,6 @@ uint8_t rcr8(x86emu_t *emu, uint8_t d, uint8_t s)
         }
         /* set the new carry flag, based on the variable "cf" */
 		CONDITIONAL_SET_FLAG(cf, F_CF);
-        /* OVERFLOW is set *IFF* cnt==1, then it is the 
-           xor of CF and the most significant bit.  Blecck. */
-        /* parenthesized... */
-		if (cnt == 1) {
-			CONDITIONAL_SET_FLAG(XOR2(ocf + ((d >> 6) & 0x2)),
-								 F_OF);
-		}
 	}
 	return (uint8_t)res;
 }
@@ -648,6 +644,8 @@ uint16_t rcr16(x86emu_t *emu, uint16_t d, uint8_t s)
 		if (cnt == 1) {
 			cf = d & 0x1;
 			ocf = ACCESS_FLAG(F_CF) != 0;
+			CONDITIONAL_SET_FLAG((ocf ^ (d >> 15)) & 0x1,
+								 F_OF);
 		} else
 			cf = (d >> (cnt - 1)) & 0x1;
 		mask = (1 << (16 - cnt)) - 1;
@@ -657,10 +655,6 @@ uint16_t rcr16(x86emu_t *emu, uint16_t d, uint8_t s)
 			res |= 1 << (16 - cnt);
 		}
 		CONDITIONAL_SET_FLAG(cf, F_CF);
-		if (cnt == 1) {
-			CONDITIONAL_SET_FLAG(XOR2(ocf + ((d >> 14) & 0x2)),
-								 F_OF);
-		}
 	}
 	return (uint16_t)res;
 }
@@ -682,6 +676,8 @@ uint32_t rcr32(x86emu_t *emu, uint32_t d, uint8_t s)
 		if (cnt == 1) {
 			cf = d & 0x1;
 			ocf = ACCESS_FLAG(F_CF) != 0;
+			CONDITIONAL_SET_FLAG((ocf ^ (d >> 31)) & 0x1,
+								 F_OF);
 		} else
 			cf = (d >> (cnt - 1)) & 0x1;
 		mask = (1 << (32 - cnt)) - 1;
@@ -692,10 +688,6 @@ uint32_t rcr32(x86emu_t *emu, uint32_t d, uint8_t s)
 			res |= 1 << (32 - cnt);
 		}
 		CONDITIONAL_SET_FLAG(cf, F_CF);
-		if (cnt == 1) {
-			CONDITIONAL_SET_FLAG(XOR2(ocf + ((d >> 30) & 0x2)),
-								 F_OF);
-		}
 	}
 	return res;
 }
@@ -885,8 +877,7 @@ uint16_t shld16 (x86emu_t *emu, uint16_t d, uint16_t fill, uint8_t s)
 			res = d;
 		}
 		if (cnt == 1) {
-			CONDITIONAL_SET_FLAG((((res & 0x8000) == 0x8000) ^
-								  (ACCESS_FLAG(F_CF) != 0)), F_OF);
+			CONDITIONAL_SET_FLAG(((res ^ d) >> 15)&1, F_OF);
 		} else {
 			CLEAR_FLAG(F_OF);
 		}
@@ -927,8 +918,7 @@ uint32_t shld32 (x86emu_t *emu, uint32_t d, uint32_t fill, uint8_t s)
 		res = d;
 	}
 	if (cnt == 1) {
-		CONDITIONAL_SET_FLAG((((res & 0x80000000) == 0x80000000) ^
-								(ACCESS_FLAG(F_CF) != 0)), F_OF);
+		CONDITIONAL_SET_FLAG(((res ^ d) >> 31)&1, F_OF);
 	} else {
 		CLEAR_FLAG(F_OF);
 	}
@@ -959,7 +949,7 @@ uint16_t shrd16 (x86emu_t *emu, uint16_t d, uint16_t fill, uint8_t s)
 		}
 
 		if (cnt == 1) {
-			CONDITIONAL_SET_FLAG(XOR2(res >> 14), F_OF);
+			CONDITIONAL_SET_FLAG(((res ^ d) >> 15)&1, F_OF);
         } else {
 			CLEAR_FLAG(F_OF);
         }
@@ -1005,7 +995,7 @@ uint32_t shrd32 (x86emu_t *emu, uint32_t d, uint32_t fill, uint8_t s)
 		res = d;
 	}
 	if (cnt == 1) {
-		CONDITIONAL_SET_FLAG(XOR2(res >> 30), F_OF);
+		CONDITIONAL_SET_FLAG(((res ^ d) >> 31)&1, F_OF);
 	} else {
 		CLEAR_FLAG(F_OF);
 	}
@@ -1044,14 +1034,14 @@ Implements the SBB instruction and side effects.
 ****************************************************************************/
 uint16_t sbb16(x86emu_t *emu, uint16_t d, uint16_t s)
 {
-    uint32_t res;   /* all operands in native machine order */
-    uint32_t bc;
+	uint32_t res;   /* all operands in native machine order */
+	uint32_t bc;
 	CHECK_FLAGS(emu);
 
 	if (ACCESS_FLAG(F_CF))
-        res = d - s - 1;
-    else
-        res = d - s;
+		res = d - s - 1;
+	else
+		res = d - s;
 	CONDITIONAL_SET_FLAG(res & 0x8000, F_SF);
 	CONDITIONAL_SET_FLAG((res & 0xffff) == 0, F_ZF);
 	CONDITIONAL_SET_FLAG(PARITY(res & 0xff), F_PF);
@@ -1075,9 +1065,9 @@ uint32_t sbb32(x86emu_t *emu, uint32_t d, uint32_t s)
 	CHECK_FLAGS(emu);
 
 	if (ACCESS_FLAG(F_CF))
-        res = d - s - 1;
-    else
-        res = d - s;
+		res = d - s - 1;
+	else
+		res = d - s;
 	CONDITIONAL_SET_FLAG(res & 0x80000000, F_SF);
 	CONDITIONAL_SET_FLAG(!res, F_ZF);
 	CONDITIONAL_SET_FLAG(PARITY(res & 0xff), F_PF);

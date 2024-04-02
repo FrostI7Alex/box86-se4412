@@ -34,10 +34,10 @@ GO(4)
 
 // Start ...
 #define GO(A)   \
-static uintptr_t my_Start_fct_##A = 0;                                              \
-static void* my_Start_##A(void* data, void* name, void* attr)                       \
-{                                                                                   \
-    return (void*)RunFunction(my_context, my_Start_fct_##A, 3, data, name, attr);   \
+static uintptr_t my_Start_fct_##A = 0;                                                  \
+static void* my_Start_##A(void* data, void* name, void* attr)                           \
+{                                                                                       \
+    return (void*)RunFunctionFmt(my_Start_fct_##A, "ppp", data, name, attr);\
 }
 SUPER()
 #undef GO
@@ -56,10 +56,10 @@ static void* find_Start_Fct(void* fct)
 }
 // End ...
 #define GO(A)   \
-static uintptr_t my_End_fct_##A = 0;                       \
-static void my_End_##A(void* data, void* name)             \
-{                                                          \
-    RunFunction(my_context, my_End_fct_##A, 2, data, name);\
+static uintptr_t my_End_fct_##A = 0;                                \
+static void my_End_##A(void* data, void* name)                      \
+{                                                                   \
+    RunFunctionFmt(my_End_fct_##A, "pp", data, name);   \
 }
 SUPER()
 #undef GO
@@ -78,10 +78,10 @@ static void* find_End_Fct(void* fct)
 }
 // CharData ...
 #define GO(A)   \
-static uintptr_t my_CharData_fct_##A = 0;                       \
-static void my_CharData_##A(void* data, void* s, int l)         \
-{                                                               \
-    RunFunction(my_context, my_CharData_fct_##A, 3, data, s, l);\
+static uintptr_t my_CharData_fct_##A = 0;                               \
+static void my_CharData_##A(void* data, void* s, int l)                 \
+{                                                                       \
+    RunFunctionFmt(my_CharData_fct_##A, "ppi", data, s, l); \
 }
 SUPER()
 #undef GO
@@ -98,15 +98,67 @@ static void* find_CharData_Fct(void* fct)
     printf_log(LOG_NONE, "Warning, no more slot for expat CharData callback\n");
     return NULL;
 }
+// StartDoctypeDeclHandler
+#define GO(A)   \
+static uintptr_t my_StartDoctypeDeclHandler_fct_##A = 0;                                                  \
+static void* my_StartDoctypeDeclHandler_##A(void* data, void* name, void* sysid, void* pubid, int has_internal_subset) \
+{                                                                                       \
+    return (void*)RunFunctionFmt(my_StartDoctypeDeclHandler_fct_##A, "ppppi", data, name, sysid, pubid, has_internal_subset);\
+}
+SUPER()
+#undef GO
+static void* find_StartDoctypeDeclHandler_Fct(void* fct)
+{
+    if(!fct) return fct;
+    if(GetNativeFnc((uintptr_t)fct))  return GetNativeFnc((uintptr_t)fct);
+    #define GO(A) if(my_StartDoctypeDeclHandler_fct_##A == (uintptr_t)fct) return my_StartDoctypeDeclHandler_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_StartDoctypeDeclHandler_fct_##A == 0) {my_StartDoctypeDeclHandler_fct_##A = (uintptr_t)fct; return my_StartDoctypeDeclHandler_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for expat StartDoctypeDeclHandler callback\n");
+    return NULL;
+}
+// EndDoctypeDeclHandler
+#define GO(A)   \
+static uintptr_t my_EndDoctypeDeclHandler_fct_##A = 0;                                                  \
+static void* my_EndDoctypeDeclHandler_##A(void* data) \
+{                                                                                       \
+    return (void*)RunFunctionFmt(my_EndDoctypeDeclHandler_fct_##A, "p", data);\
+}
+SUPER()
+#undef GO
+static void* find_EndDoctypeDeclHandler_Fct(void* fct)
+{
+    if(!fct) return fct;
+    if(GetNativeFnc((uintptr_t)fct))  return GetNativeFnc((uintptr_t)fct);
+    #define GO(A) if(my_EndDoctypeDeclHandler_fct_##A == (uintptr_t)fct) return my_EndDoctypeDeclHandler_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_EndDoctypeDeclHandler_fct_##A == 0) {my_EndDoctypeDeclHandler_fct_##A = (uintptr_t)fct; return my_EndDoctypeDeclHandler_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for expat EndDoctypeDeclHandler callback\n");
+    return NULL;
+}
 #undef SUPER
 
 EXPORT void my_XML_SetElementHandler(x86emu_t* emu, void* p, void* start, void* end)
 {
+    (void)emu;
     my->XML_SetElementHandler(p, find_Start_Fct(start), find_End_Fct(end));
+}
+
+EXPORT void my_XML_SetDoctypeDeclHandler(x86emu_t* emu, void* p, void* start, void* end)
+{
+    (void)emu;
+    my->XML_SetDoctypeDeclHandler(p, find_StartDoctypeDeclHandler_Fct(start), find_EndDoctypeDeclHandler_Fct(end));
 }
 
 EXPORT void my_XML_SetCharacterDataHandler(x86emu_t* emu, void* p, void* h)
 {
+    (void)emu;
     my->XML_SetCharacterDataHandler(p, find_CharData_Fct(h));
 }
 

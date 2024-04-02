@@ -1,3 +1,52 @@
+v0.3.4
+======
+* X86Libs: Updated libstdc++ & libgcc_s
+* X86Libs: Use x86 vrsion of libunwind (it's needed by wine)
+* Dynarec: Fixed some flags propagation issues inside blocks
+* Dynarec: Improved Strong Memory Model emulation, introducing a 3rd level
+* CPU: Remoworked how INT, priviliged opcodes and teh Trace flags works
+* CPU: Added full support for SSE4.2
+* ElfLoader: rework how elf memory is handled
+* Emulation: Better handling of Signal (also handling SIGMAX correctly)
+* Emulation: Better support for POKEUSER/PEEKUSER (helps Windows Unity games)
+* Wrapping: More libs and some fixes in function wrapping (gtk3, vulkan...)
+* Wrapping: Removed faked libunwind wrapping
+* Hardware: Added more profile, with support for ADLink Ampere Altra
+* OS: Added profile to build for Android and Termux.
+=> Mostly a stability update with improved elfloader again, and added SSE 4.2 support (still need to work on the Dynarec part of this)
+=> Some work also to reduce the memory footprint
+
+v0.3.2
+======
+* Better syscall handling
+* Fixed some wrapped functions, added some others
+* Introduced another wrapper helper
+* Added some more opcodes
+* Added a cosimulation mode (to compare the behaviour of the dynarec against the interpreter)
+* Added support of FASTNAN for some more opcodes
+* Reduced memory footprint
+* Added BOX86_NOSANDBOX (adds an argument to the command line)
+* Added an ukrainian translation
+=> Mostly a stability update with improved elfloader, fixed opcodes and refined profiles
+
+v0.3.0
+======
+* Added rcfile handling: box86 now read `/etc/box86.box86rc` and `~/.box86rc` and apply per process parameters
+    => Every program can be finetuned, for speed or just to make them work
+* Added BOX86_DYNAREC_FORWARD to allow bigger Dynarec block to be build
+* Refactored Strong Memory Model emulation (faster and more accurate)
+* Box86 now return a custom name for the CPU instal of P4, build with Box86 and the cpu name it's running on
+* Improved memory protection tracking and signal handling, again
+* More wrapped libs (especially on the gtk familly)
+* More wrapped functions
+* Added support for CreateDeviceEx in d3dadapter9, for better gallium nine support
+* Improved dladdr/dladdr1 wrapped function
+* Some fixes to flags handling in the Dynarec on some special cases
+* Added specific suppport for RK3588 board (needed some hack in signal handling, probably due to the use of a non mainlined kernel)
+* Lots of improvment in the Rounding of float & double (Dynarec and Interpretor), and proper handling of denormals when converting to/from 80 bits long double
+* Added specific suppport for RK3588 board (needed some hack in signal handling, probably due to the use of a non mainlined kernel)
+
+
 v0.2.8
 ======
 * Wrapped more vulkan function, dxvk 2.0 now works

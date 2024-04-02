@@ -29,10 +29,10 @@ GO(4)
 
 // cairo_destroy
 #define GO(A)   \
-static uintptr_t my_cairo_destroy_fct_##A = 0;                  \
-static void my_cairo_destroy_##A(void* data)                    \
-{                                                               \
-    RunFunction(my_context, my_cairo_destroy_fct_##A, 1, data); \
+static uintptr_t my_cairo_destroy_fct_##A = 0;                          \
+static void my_cairo_destroy_##A(void* data)                            \
+{                                                                       \
+    RunFunctionFmt(my_cairo_destroy_fct_##A, "p", data);    \
 }
 SUPER()
 #undef GO
@@ -52,9 +52,10 @@ static void* find_cairo_destroy_Fct(void* fct)
 
 #undef SUPER
 
-#define SET_USERDATA(A)                                                                 \
+#define SET_USERDATA(A)                                                             \
 EXPORT int my_##A (x86emu_t* emu, void* cr, void* key, void* data, void* destroy)   \
 {                                                                                   \
+    (void)emu;                                                                      \
     return my->A(cr, key, data, find_cairo_destroy_Fct(destroy));                   \
 }
 
@@ -73,4 +74,3 @@ SET_USERDATA(cairo_font_face_set_user_data)
     freeMy();
 
 #include "wrappedlib_init.h"
-

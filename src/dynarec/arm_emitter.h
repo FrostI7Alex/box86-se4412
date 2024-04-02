@@ -222,6 +222,8 @@ Op is 20-27
 // add dst, src1, src2, lsr #imm
 #define ADD_REG_LSR_IMM5(dst, src1, src2, imm5) \
     EMIT(0xe0800000 | ((dst) << 12) | ((src1) << 16) | brLSR(imm5, src2) )
+#define ADD_REG_LSR_IMM5_COND(cond, dst, src1, src2, imm5) \
+    EMIT((cond) | 0x00800000 | ((dst) << 12) | ((src1) << 16) | brLSR(imm5, src2) )
 #define ADC_IMM8(dst, src, imm8) \
     EMIT(0xe2a00000 | ((dst) << 12) | ((src) << 16) | brIMM(imm8) )
 // add.s dst, src, #(imm8)
@@ -390,6 +392,8 @@ Op is 20-27
 #define LDRD_IMM8(reg, addr, imm8) EMIT(c__ | 0b000<<25 | 1<<24  | (((imm8)<0)?0:1)<<23 | 1<<22 | 0<<21 | 0<<20 | ((reg) << 12) | ((addr) << 16) | ((abs(imm8))&0xf0)<<(8-4) | (0b1101<<4) | ((abs(imm8))&0x0f) )
 // ldrd reg, reg+1, [addr, +rm], reg must be even, reg+1 is implicit
 #define LDRD_REG(reg, addr, rm) EMIT(c__ | 0b000<<25 | 1<<24  | 1<<23 | 0<<22 | 0<<21 | 0<<20 | ((reg) << 12) | ((addr) << 16) | 0b1101<<4 | (rm) )
+// ldr reg, [pc+imm]
+#define LDR_literal(reg, imm12) EMIT(c__ | 0b010<<25 | 1<<24 | (((imm12)>=0)?1:0)<<23 | 0<<21 | 1<<20 | 0b1111<<16 | (reg)<<12 | (abs(imm12)))
 
 // str reg, [addr, #+/-imm9]
 #define STR_IMM9(reg, addr, imm9) EMIT(0xe5000000 | (((imm9)<0)?0:1)<<23 | ((reg) << 12) | ((addr) << 16) | brIMM(imm9) )
@@ -429,6 +433,10 @@ Op is 20-27
 
 // bl cond offset
 #define BLcond(C, O) EMIT(C | (0b101<<25) | (1<<24) | (((O)>>2)&0xffffff))
+
+// adr
+#define ADR_gen(cond, P, Rd, Imm12) (cond | (1<<25) | (((P)?0b0100:0b0010)<<21) | (0b1111<<16) | ((Rd)<<12) | (Imm12))
+#define ADR(cond, Rd, Imm)  EMIT(ADR_gen(cond, (Imm>=0), Rd, ((Imm>=0)?Imm:-Imm)&0b111111111111))
 
 // push reg!, {list}
 //                           all |    const    |pre-index| subs    | no PSR  |writeback| store   |   base    |reg list
@@ -589,8 +597,12 @@ Op is 20-27
 
 // Count leading 0 bit of Rm, store result in Rd
 #define CLZ(Rd, Rm)  EMIT(c__ | 0b00010110<<20 | 0b1111<<16 | (Rd)<<12 | 0b1111<<8 | 0b0001<<4 | (Rm))
+// Count leading 0 bit of Rm, store result in Rd with cond
+#define CLZ_COND(cond, Rd, Rm)  EMIT(cond | 0b00010110<<20 | 0b1111<<16 | (Rd)<<12 | 0b1111<<8 | 0b0001<<4 | (Rm))
 // Reverse bits of Rm, store result in Rd
 #define RBIT(Rd, Rm) EMIT(c__ | 0b01101111<<20 | 0b1111<<16 | (Rd)<<12 | 0b1111<<8 | 0b0011<<4 | (Rm))
+// Reverse bits of Rm, store result in Rd with cond
+#define RBIT_COND(cond, Rd, Rm) EMIT(cond | 0b01101111<<20 | 0b1111<<16 | (Rd)<<12 | 0b1111<<8 | 0b0011<<4 | (Rm))
 
 #define PLD_gen(U, R, Rn, Imm5, type, Rm) (0b1111<<28 | 0b0111<<24 | (U)<<23 | (R)<<22 | 0b01<<20 | (Rn)<<16 | 0b1111<<12 | (Imm5)<<7 | (type)<<5 | (Rm))
 // Preload Cache Rn+Rm
@@ -600,7 +612,21 @@ Op is 20-27
 
 #define DMB_gen(opt)    (0b1111<<28 | 0b01010111<<20 | 0b1111<<16 | 0b1111<<12 | 0b0000<<8 | 0b0101<<4 | (opt))
 // Data memory barrier Inner Sharable
+#ifdef PANDORA
+// The Pandora is single core and ordered, DMB is not usefull here so just emit nothing
+#define DMB_ISH()
+#else
 #define DMB_ISH()   EMIT(DMB_gen(0b1011))
+#endif
+
+#define DSB_gen(opt)    (0b1111<<28 | 0b01010111<<20 | 0b1111<<16 | 0b1111<<12 | 0b0000<<8 | 0b0100<<4 | (opt))
+// Data memory barrier Inner Sharable
+#ifdef PANDORA
+// The Pandora is single core and ordered, DSB is not usefull here so just emit nothing
+#define DSB_ISH()
+#else
+#define DSB_ISH()   EMIT(DSB_gen(0b1011))
+#endif
 
 #define SWP_gen(cond, B, Rn, Rt, Rt2)   (cond | 0b0001<<24 | (B)<<22 | (Rn)<<16 | (Rt)<<12 | 0b1001<<4 | (Rt2))
 // SWAP (atomic) [Rn]->Rt2 / Rt->[Rn], Rt can be same as Rt2
@@ -626,11 +652,15 @@ Op is 20-27
 #define VMRS(Rt)    EMIT(c__ | (0b1110<<24) | (0b1111<<20) | (0b0001<<16) | ((Rt)<<12) | (0b1010<<8) | (0b0001<<4) | (0b0000))
 // Move to FPSCR from Arm register
 #define VMSR(Rt)    EMIT(c__ | (0b1110<<24) | (0b1110<<20) | (0b0001<<16) | ((Rt)<<12) | (0b1010<<8) | (0b0001<<4) | (0b0000))
+// Move to FPSCR from Arm register with cond
+#define VMSR_cond(cond, Rt)    EMIT(cond | (0b1110<<24) | (0b1110<<20) | (0b0001<<16) | ((Rt)<<12) | (0b1010<<8) | (0b0001<<4) | (0b0000))
 // Move to FPSCR from Arm flags APSR
 #define VMRS_APSR()    VMRS(15)
 
 // Move between Rt to Sm
 #define VMOVtoV(Sm, Rt) EMIT(c__ | (0b1110<<24) | (0b000<<21) | (0<<20) | ((((Sm)&0b11110)>>1)<<16) | ((Rt)<<12) | (0b1010<<8) | (((Sm)&1)<<7) |(0b00<<6) | (1<<4))
+// Move between Rt to Sm with condition
+#define VMOVtoVcond(cond, Sm, Rt) EMIT(cond | (0b1110<<24) | (0b000<<21) | (0<<20) | ((((Sm)&0b11110)>>1)<<16) | ((Rt)<<12) | (0b1010<<8) | (((Sm)&1)<<7) |(0b00<<6) | (1<<4))
 // Move between Sm to Rt
 #define VMOVfrV(Rt, Sm) EMIT(c__ | (0b1110<<24) | (0b000<<21) | (1<<20) | ((((Sm)&0b11110)>>1)<<16) | ((Rt)<<12) | (0b1010<<8) | (((Sm)&1)<<7) |(0b00<<6) | (1<<4))
 
@@ -820,6 +850,8 @@ Op is 20-27
 #define VLD1_32(Dd, Rn) EMIT(Vxx1gen(1, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b0111, 2, 0, 15))
 // Load [Rn]! => Dd. Align is 4
 #define VLD1_32_W(Dd, Rn) EMIT(Vxx1gen(1, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b0111, 2, 0, 13))
+// Load [Rn]! => Dd. Align is 8
+#define VLD1_64_W(Dd, Rn) EMIT(Vxx1gen(1, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b0111, 3, 0, 13))
 // Load [Rn]! => Dd/Dd+1. Align is 4
 #define VLD1Q_32_W(Dd, Rn) EMIT(Vxx1gen(1, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b1010, 2, 0, 13))
 // Load [Rn, Rm]! => Dd/Dd+1. If Rm==15, no writeback, Rm ignored, else writeback Rn <- Rn+Rm. Align is 4
@@ -841,6 +873,8 @@ Op is 20-27
 
 // Store [Rn]! => Dd. Align is 4
 #define VST1_32_W(Dd, Rn) EMIT(Vxx1gen(0, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b0111, 2, 0, 13))
+// Store [Rn]! => Dd. Align is 8
+#define VST1_64_W(Dd, Rn) EMIT(Vxx1gen(0, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b0111, 3, 0, 13))
 // Store [Rn] => Dd/Dd+1. Align is 4
 #define VST1Q_32(Dd, Rn) EMIT(Vxx1gen(0, ((Dd)>>4)&1, Rn, ((Dd)&0x0f), 0b1010, 2, 0, 15))
 // Store [Rn]! => Dd/Dd+1. Align is 4
@@ -879,6 +913,8 @@ Op is 20-27
 #define VMOV_igen(i, D, imm3, Vd, cmode, Q, op, imm4)   (0b1111<<28 | 0b001<<25 | (i)<<24 | 1<<23 | (D)<<22 | (imm3)<<16 | (Vd)<<12 | (cmode)<<8 | (Q)<<6 | (op)<<5 | 1<<4 | (imm4))
 #define VMOV_8(Dd, imm)     EMIT(VMOV_igen(((imm)>>7)&1, ((Dd)>>4)&1, ((imm)>>4)&7, (Dd)&15, 0b1110, 0, 0, (imm)&15))
 #define VMOVQ_8(Dd, imm)    EMIT(VMOV_igen(((imm)>>7)&1, ((Dd)>>4)&1, ((imm)>>4)&7, (Dd)&15, 0b1110, 1, 0, (imm)&15))
+// Dd <= imm8 6bits duplicated 1bit -> 1byte
+#define VMOV_D64(Dd, imm)    EMIT(VMOV_igen(((imm)>>7)&1, ((Dd)>>4)&1, ((imm)>>4)&7, (Dd)&15, 0b1110, 0, 1, (imm)&15))
 // Dd <= imm8 in high bits
 #define VMOV_H32(Dd, imm8)  EMIT(VMOV_igen(((imm8)>>7)&1, ((Dd)>>4)&1, ((imm8)>>4)&7, (Dd)&15, 0b0110, 0, 0, (imm8)&15))
 // Dd <= imm8 in high bits
@@ -1089,6 +1125,7 @@ Op is 20-27
 #define VMULL_U32_U16(Dd, Dn, Dm)   EMIT(VMULL_NEON_gen(1, ((Dd)>>4)&1, 1, (Dn)&15, (Dd)&15, 0, ((Dn)>>4)&1, ((Dm)>>4)&1, (Dm)&15))
 #define VMULL_S64_S32(Dd, Dn, Dm)   EMIT(VMULL_NEON_gen(0, ((Dd)>>4)&1, 2, (Dn)&15, (Dd)&15, 0, ((Dn)>>4)&1, ((Dm)>>4)&1, (Dm)&15))
 #define VMULL_U64_U32(Dd, Dn, Dm)   EMIT(VMULL_NEON_gen(1, ((Dd)>>4)&1, 2, (Dn)&15, (Dd)&15, 0, ((Dn)>>4)&1, ((Dm)>>4)&1, (Dm)&15))
+#define VMULL_P64(Dd, Dn, Dm)       EMIT(VMULL_NEON_gen(0, ((Dd)>>4)&1, 2, (Dn)&15, (Dd)&15, 1, ((Dn)>>4)&1, ((Dm)>>4)&1, (Dm)&15))
 
 #define VMUL_NEON_gen(op, D, size, Vn, Vd, N, Q, M, Vm)    (0b1111<<28 | 0b001<<25 | (op)<<24 | 0<<23 | (D)<<22 | (size)<<20 | (Vn)<<16 | (Vd)<<12 | 0b1001<<8 | (N)<<7 | (Q)<<6 | (M)<<5 | 1<<4 | (Vm))
 #define VMULQ_32(Dd, Dn, Dm)     EMIT(VMUL_NEON_gen(0, ((Dd)>>4)&1, 0b10, (Dn)&15, (Dd)&15, ((Dn)>>4)&1, 1, ((Dm)>>4)&1, (Dm)&15))
@@ -1385,5 +1422,18 @@ Op is 20-27
 #define VABSQ_S16(Dd, Dm)       EMIT(VABS_vgen(((Dd)>>4)&1, 1, (Dd)&15, 0, 1, ((Dm)>>4)&1, (Dm)&15))
 #define VABSQ_S8(Dd, Dm)        EMIT(VABS_vgen(((Dd)>>4)&1, 0, (Dd)&15, 0, 1, ((Dm)>>4)&1, (Dm)&15))
 #define VABSQ_F(Dd, Dm)         EMIT(VABS_vgen(((Dd)>>4)&1, 2, (Dd)&15, 1, 1, ((Dm)>>4)&1, (Dm)&15))
+
+// AES
+#define AESD_gen(D, size, Vd, M, Vm)    (0b1111<<28 | 0b0011<<24 | 1<<23 | (D)<<22 | 0b11<<20 | (size)<<18 | (Vd)<<12 | 0b0110<<7 | 1<<6 | (M)<<5 | (Vm))
+#define AESD(Dd, Dm)            EMIT(AESD_gen(((Dd)>>4)&1, 0, (Dd)&15, ((Dm)>>4)&1, (Dm)&15))
+
+#define AESE_gen(D, size, Vd, M, Vm)    (0b1111<<28 | 0b0011<<24 | 1<<23 | (D)<<22 | 0b11<<20 | (size)<<18 | (Vd)<<12 | 0b0110<<7 | 0<<6 | (M)<<5 | (Vm))
+#define AESE(Dd, Dm)            EMIT(AESE_gen(((Dd)>>4)&1, 0, (Dd)&15, ((Dm)>>4)&1, (Dm)&15))
+
+#define AESIMC_gen(D, size, Vd, M, Vm)  (0b1111<<28 | 0b0011<<24 | 1<<23 | (D)<<22 | 0b11<<20 | (size)<<18 | (Vd)<<12 | 0b0111<<7 | 1<<6 | (M)<<5 | (Vm))
+#define AESIMC(Dd, Dm)          EMIT(AESIMC_gen(((Dd)>>4)&1, 0, (Dd)&15, ((Dm)>>4)&1, (Dm)&15))
+
+#define AESMC_gen(D, size, Vd, M, Vm)   (0b1111<<28 | 0b0011<<24 | 1<<23 | (D)<<22 | 0b11<<20 | (size)<<18 | (Vd)<<12 | 0b0111<<7 | 0<<6 | (M)<<5 | (Vm))
+#define AESMC(Dd, Dm)           EMIT(AESMC_gen(((Dd)>>4)&1, 0, (Dd)&15, ((Dm)>>4)&1, (Dm)&15))
 
 #endif  //__ARM_EMITTER_H__

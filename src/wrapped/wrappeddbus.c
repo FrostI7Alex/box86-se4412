@@ -36,10 +36,10 @@ GO(3)
 
 // DBusFreeFunction
 #define GO(A)   \
-static uintptr_t my_DBusFreeFunction_fct_##A = 0;               \
-static void my_DBusFreeFunction_##A(void* p)                    \
-{                                                               \
-    RunFunction(my_context, my_DBusFreeFunction_fct_##A, 1, p); \
+static uintptr_t my_DBusFreeFunction_fct_##A = 0;                   \
+static void my_DBusFreeFunction_##A(void* p)                        \
+{                                                                   \
+    RunFunctionFmt(my_DBusFreeFunction_fct_##A, "p", p);\
 }
 SUPER()
 #undef GO
@@ -58,10 +58,10 @@ static void* find_DBusFreeFunction_Fct(void* fct)
 }
 // DBusHandleMessageFunction
 #define GO(A)   \
-static uintptr_t my_DBusHandleMessageFunction_fct_##A = 0;                              \
-static int my_DBusHandleMessageFunction_##A(void* a, void* b, void* c)                  \
-{                                                                                       \
-    return RunFunction(my_context, my_DBusHandleMessageFunction_fct_##A, 3, a, b, c);   \
+static uintptr_t my_DBusHandleMessageFunction_fct_##A = 0;                                  \
+static int my_DBusHandleMessageFunction_##A(void* a, void* b, void* c)                      \
+{                                                                                           \
+    return RunFunctionFmt(my_DBusHandleMessageFunction_fct_##A, "ppp", a, b, c);\
 }
 SUPER()
 #undef GO
@@ -80,10 +80,10 @@ static void* find_DBusHandleMessageFunction_Fct(void* fct)
 }
 // DBusAddTimeoutFunction
 #define GO(A)   \
-static uintptr_t my_DBusAddTimeoutFunction_fct_##A = 0;                         \
-static int my_DBusAddTimeoutFunction_##A(void* a, void* b)                      \
-{                                                                               \
-    return RunFunction(my_context, my_DBusAddTimeoutFunction_fct_##A, 2, a, b); \
+static uintptr_t my_DBusAddTimeoutFunction_fct_##A = 0;                                 \
+static int my_DBusAddTimeoutFunction_##A(void* a, void* b)                              \
+{                                                                                       \
+    return RunFunctionFmt(my_DBusAddTimeoutFunction_fct_##A, "pp", a, b);   \
 }
 SUPER()
 #undef GO
@@ -102,10 +102,10 @@ static void* find_DBusAddTimeoutFunction_Fct(void* fct)
 }
 // DBusRemoveTimeoutFunction
 #define GO(A)   \
-static uintptr_t my_DBusRemoveTimeoutFunction_fct_##A = 0;                  \
-static void my_DBusRemoveTimeoutFunction_##A(void* a, void* b)              \
-{                                                                           \
-    RunFunction(my_context, my_DBusRemoveTimeoutFunction_fct_##A, 2, a, b); \
+static uintptr_t my_DBusRemoveTimeoutFunction_fct_##A = 0;                          \
+static void my_DBusRemoveTimeoutFunction_##A(void* a, void* b)                      \
+{                                                                                   \
+    RunFunctionFmt(my_DBusRemoveTimeoutFunction_fct_##A, "pp", a, b);   \
 }
 SUPER()
 #undef GO
@@ -124,10 +124,10 @@ static void* find_DBusRemoveTimeoutFunction_Fct(void* fct)
 }
 // DBusTimeoutToggledFunction
 #define GO(A)   \
-static uintptr_t my_DBusTimeoutToggledFunction_fct_##A = 0;                     \
-static void my_DBusTimeoutToggledFunction_##A(void* a, void* b)                 \
-{                                                                               \
-    RunFunction(my_context, my_DBusTimeoutToggledFunction_fct_##A, 2, a, b);    \
+static uintptr_t my_DBusTimeoutToggledFunction_fct_##A = 0;                         \
+static void my_DBusTimeoutToggledFunction_##A(void* a, void* b)                     \
+{                                                                                   \
+    RunFunctionFmt(my_DBusTimeoutToggledFunction_fct_##A, "pp", a, b);  \
 }
 SUPER()
 #undef GO
@@ -146,10 +146,10 @@ static void* find_DBusTimeoutToggledFunction_Fct(void* fct)
 }
 // DBusWakeupMainFunction
 #define GO(A)   \
-static uintptr_t my_DBusWakeupMainFunction_fct_##A = 0;                 \
-static void my_DBusWakeupMainFunction_##A(void* a)                      \
-{                                                                       \
-    RunFunction(my_context, my_DBusWakeupMainFunction_fct_##A, 1, a);   \
+static uintptr_t my_DBusWakeupMainFunction_fct_##A = 0;                     \
+static void my_DBusWakeupMainFunction_##A(void* a)                          \
+{                                                                           \
+    RunFunctionFmt(my_DBusWakeupMainFunction_fct_##A, "p", a);  \
 }
 SUPER()
 #undef GO
@@ -169,10 +169,10 @@ static void* find_DBusWakeupMainFunction_Fct(void* fct)
 
 // DBusPendingCallNotifyFunction
 #define GO(A)   \
-static uintptr_t my_DBusPendingCallNotifyFunction_fct_##A = 0;   \
-static void my_DBusPendingCallNotifyFunction_##A(void* pending, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusPendingCallNotifyFunction_fct_##A, 2, pending, data);\
+static uintptr_t my_DBusPendingCallNotifyFunction_fct_##A = 0;                                  \
+static void my_DBusPendingCallNotifyFunction_##A(void* pending, void* data)                     \
+{                                                                                               \
+    RunFunctionFmt(my_DBusPendingCallNotifyFunction_fct_##A, "pp", pending, data);  \
 }
 SUPER()
 #undef GO
@@ -192,10 +192,10 @@ static void* findDBusPendingCallNotifyFunctionFct(void* fct)
 
 // DBusDispatchStatusFunction
 #define GO(A)   \
-static uintptr_t my_DBusDispatchStatusFunction_fct_##A = 0;   \
-static void my_DBusDispatchStatusFunction_##A(void* connection, int new_status, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusDispatchStatusFunction_fct_##A, 3, connection, new_status, data);\
+static uintptr_t my_DBusDispatchStatusFunction_fct_##A = 0;                                                 \
+static void my_DBusDispatchStatusFunction_##A(void* connection, int new_status, void* data)                 \
+{                                                                                                           \
+    RunFunctionFmt(my_DBusDispatchStatusFunction_fct_##A, "pip", connection, new_status, data); \
 }
 SUPER()
 #undef GO
@@ -215,10 +215,10 @@ static void* findDBusDispatchStatusFunctionFct(void* fct)
 
 // DBusAddWatchFunction
 #define GO(A)   \
-static uintptr_t my_DBusAddWatchFunction_fct_##A = 0;   \
-static int my_DBusAddWatchFunction_##A(void* watch, void* data)     \
-{                                       \
-    return (int)RunFunction(my_context, my_DBusAddWatchFunction_fct_##A, 2, watch, data);\
+static uintptr_t my_DBusAddWatchFunction_fct_##A = 0;                                           \
+static int my_DBusAddWatchFunction_##A(void* watch, void* data)                                 \
+{                                                                                               \
+    return (int)RunFunctionFmt(my_DBusAddWatchFunction_fct_##A, "pp", watch, data); \
 }
 SUPER()
 #undef GO
@@ -238,10 +238,10 @@ static void* findDBusAddWatchFunctionFct(void* fct)
 
 // DBusRemoveWatchFunction
 #define GO(A)   \
-static uintptr_t my_DBusRemoveWatchFunction_fct_##A = 0;   \
-static void my_DBusRemoveWatchFunction_##A(void* watch, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusRemoveWatchFunction_fct_##A, 2, watch, data);\
+static uintptr_t my_DBusRemoveWatchFunction_fct_##A = 0;                                \
+static void my_DBusRemoveWatchFunction_##A(void* watch, void* data)                     \
+{                                                                                       \
+    RunFunctionFmt(my_DBusRemoveWatchFunction_fct_##A, "pp", watch, data);  \
 }
 SUPER()
 #undef GO
@@ -261,10 +261,10 @@ static void* findDBusRemoveWatchFunctionFct(void* fct)
 
 // DBusWatchToggledFunction
 #define GO(A)   \
-static uintptr_t my_DBusWatchToggledFunction_fct_##A = 0;   \
-static void my_DBusWatchToggledFunction_##A(void* watch, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusWatchToggledFunction_fct_##A, 2, watch, data);\
+static uintptr_t my_DBusWatchToggledFunction_fct_##A = 0;                               \
+static void my_DBusWatchToggledFunction_##A(void* watch, void* data)                    \
+{                                                                                       \
+    RunFunctionFmt(my_DBusWatchToggledFunction_fct_##A, "pp", watch, data); \
 }
 SUPER()
 #undef GO
@@ -284,10 +284,10 @@ static void* findDBusWatchToggledFunctionFct(void* fct)
 
 // DBusObjectPathUnregisterFunction
 #define GO(A)   \
-static uintptr_t my_DBusObjectPathUnregisterFunction_fct_##A = 0;   \
-static void my_DBusObjectPathUnregisterFunction_##A(void* connection, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusObjectPathUnregisterFunction_fct_##A, 2, connection, data);\
+static uintptr_t my_DBusObjectPathUnregisterFunction_fct_##A = 0;                                       \
+static void my_DBusObjectPathUnregisterFunction_##A(void* connection, void* data)                       \
+{                                                                                                       \
+    RunFunctionFmt(my_DBusObjectPathUnregisterFunction_fct_##A, "pp", connection, data);    \
 }
 SUPER()
 #undef GO
@@ -307,10 +307,10 @@ static void* findDBusObjectPathUnregisterFunctionFct(void* fct)
 
 // DBusObjectPathMessageFunction
 #define GO(A)   \
-static uintptr_t my_DBusObjectPathMessageFunction_fct_##A = 0;   \
-static void my_DBusObjectPathMessageFunction_##A(void* connection, void* message, void* data)     \
-{                                       \
-    RunFunction(my_context, my_DBusObjectPathMessageFunction_fct_##A, 3, connection, message, data);\
+static uintptr_t my_DBusObjectPathMessageFunction_fct_##A = 0;                                              \
+static void my_DBusObjectPathMessageFunction_##A(void* connection, void* message, void* data)               \
+{                                                                                                           \
+    RunFunctionFmt(my_DBusObjectPathMessageFunction_fct_##A, "ppp", connection, message, data); \
 }
 SUPER()
 #undef GO
@@ -330,10 +330,10 @@ static void* findDBusObjectPathMessageFunctionFct(void* fct)
 
 // dbus_internal_pad
 #define GO(A)   \
-static uintptr_t my_dbus_internal_pad_fct_##A = 0;   \
-static void my_dbus_internal_pad_##A(void* a, void* b, void* c, void* d)     \
-{                                       \
-    RunFunction(my_context, my_dbus_internal_pad_fct_##A, 4, a, b, c, d);\
+static uintptr_t my_dbus_internal_pad_fct_##A = 0;                                  \
+static void my_dbus_internal_pad_##A(void* a, void* b, void* c, void* d)            \
+{                                                                                   \
+    RunFunctionFmt(my_dbus_internal_pad_fct_##A, "pppp", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -354,12 +354,14 @@ static void* finddbus_internal_padFct(void* fct)
 
 EXPORT void my_dbus_timeout_set_data(x86emu_t* emu, void* e, void* p, void* f)
 {
+    (void)emu;
     my->dbus_timeout_set_data(e, p, find_DBusFreeFunction_Fct(f));
 }
 
 
 EXPORT int32_t my_dbus_connection_set_timeout_functions(x86emu_t* emu, void* c, void* a, void* r, void* t, void* d, void* f)
 {
+    (void)emu;
     return my->dbus_connection_set_timeout_functions(c, 
             find_DBusAddTimeoutFunction_Fct(a), 
             find_DBusRemoveTimeoutFunction_Fct(r), 
@@ -369,11 +371,13 @@ EXPORT int32_t my_dbus_connection_set_timeout_functions(x86emu_t* emu, void* c, 
 
 EXPORT int my_dbus_connection_add_filter(x86emu_t* emu, void* connection, void* fnc, void* data, void* fr)
 {
+    (void)emu;
     return my->dbus_connection_add_filter(connection, find_DBusHandleMessageFunction_Fct(fnc), data, find_DBusFreeFunction_Fct(fr));
 }
 
 EXPORT void my_dbus_connection_remove_filter(x86emu_t* emu, void* connection, void* fnc, void* data)
 {
+    (void)emu;
     my->dbus_connection_remove_filter(connection, find_DBusHandleMessageFunction_Fct(fnc), data);
 }
 
@@ -385,6 +389,7 @@ EXPORT int my_dbus_message_get_args_valist(x86emu_t* emu, void* message, void* e
     void* f = vprintf;
     return my->dbus_message_get_args_valist(message, e, arg, emu->scratch);
     #else
+    (void)emu;
     return my->dbus_message_get_args_valist(message, e, arg, b);
     #endif
 }
@@ -396,37 +401,44 @@ EXPORT int my_dbus_message_get_args(x86emu_t* emu, void* message, void* e, int a
     myStackAlign((const char*)fmt, b, emu->scratch);
     return my->dbus_message_get_args_valist(message, e, arg, emu->scratch);
     #else
+    (void)emu;
     return my->dbus_message_get_args_valist(message, e, arg, V);
     #endif
 }
 
 EXPORT int my_dbus_message_set_data(x86emu_t* emu, void* message, int32_t slot, void* data, void* free_func)
 {
+    (void)emu;
     return my->dbus_message_set_data(message, slot, data, find_DBusFreeFunction_Fct(free_func));
 }
 
 EXPORT int my_dbus_pending_call_set_notify(x86emu_t* emu, void* pending, void* func, void* data, void* free_func)
 {
+    (void)emu;
     return my->dbus_pending_call_set_notify(pending, findDBusPendingCallNotifyFunctionFct(func), data, find_DBusFreeFunction_Fct(free_func));
 }
 
 EXPORT int my_dbus_pending_call_set_data(x86emu_t* emu, void* pending, int32_t slot, void* data, void* free_func)
 {
+    (void)emu;
     return my->dbus_pending_call_set_data(pending, slot, data, find_DBusFreeFunction_Fct(free_func));
 }
 
 EXPORT void my_dbus_watch_set_data(x86emu_t* emu, void* watch, void* data, void* free_func)
 {
+    (void)emu;
     my->dbus_watch_set_data(watch, data, find_DBusFreeFunction_Fct(free_func));
 }
 
 EXPORT void my_dbus_connection_set_dispatch_status_function(x86emu_t* emu, void* connection, void* dispatch, void* data, void* free_func)
 {
+    (void)emu;
     my->dbus_connection_set_dispatch_status_function(connection, findDBusDispatchStatusFunctionFct(dispatch), data, find_DBusFreeFunction_Fct(free_func));
 }
 
 EXPORT int my_dbus_connection_set_watch_functions(x86emu_t* emu, void* connection, void* add, void* remove, void* toggled, void* data, void* free_func)
 {
+    (void)emu;
     return my->dbus_connection_set_watch_functions(connection, findDBusAddWatchFunctionFct(add), findDBusRemoveWatchFunctionFct(remove), findDBusWatchToggledFunctionFct(toggled), data, find_DBusFreeFunction_Fct(free_func));
 }
 
@@ -442,6 +454,7 @@ typedef struct my_DBusObjectPathVTable_s
 
 EXPORT int my_dbus_connection_try_register_object_path(x86emu_t* emu, void* connection, void* path, my_DBusObjectPathVTable_t* vtable, void* data, void* error)
 {
+    (void)emu;
     my_DBusObjectPathVTable_t vt = {0};
     if(vtable) {
         vt.unregister_function = findDBusObjectPathUnregisterFunctionFct(vtable->unregister_function);
@@ -457,6 +470,7 @@ EXPORT int my_dbus_connection_try_register_object_path(x86emu_t* emu, void* conn
 
 EXPORT int my_dbus_connection_try_register_fallback(x86emu_t* emu, void* connection, void* path, my_DBusObjectPathVTable_t* vtable, void* data, void* error)
 {
+    (void)emu;
     my_DBusObjectPathVTable_t vt = {0};
     if(vtable) {
         vt.unregister_function = findDBusObjectPathUnregisterFunctionFct(vtable->unregister_function);
@@ -472,11 +486,13 @@ EXPORT int my_dbus_connection_try_register_fallback(x86emu_t* emu, void* connect
 
 EXPORT int my_dbus_connection_set_data(x86emu_t* emu, void* connection, int slot, void* data, void* free_func)
 {
+    (void)emu;
     return my->dbus_connection_set_data(connection, slot, data, find_DBusFreeFunction_Fct(free_func));
 }
 
 EXPORT void my_dbus_connection_set_wakeup_main_function(x86emu_t* emu, void* connection, void* wakeup, void* data, void* free_func)
 {
+    (void)emu;
     my->dbus_connection_set_wakeup_main_function(connection, find_DBusWakeupMainFunction_Fct(wakeup), data, find_DBusFreeFunction_Fct(free_func));
 }
 
@@ -488,4 +504,3 @@ EXPORT void my_dbus_connection_set_wakeup_main_function(x86emu_t* emu, void* con
     freeMy();
 
 #include "wrappedlib_init.h"
-

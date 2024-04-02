@@ -172,6 +172,13 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             emit_cmp32(dyn, ninst, gd, ed, x3, x14);
             break;
 
+        case 0x64:
+            addr = dynarecFS(dyn, addr, ip, ninst, ok, need_epilog);
+            break;
+        case 0x65:
+            addr = dynarecGS(dyn, addr, ip, ninst, ok, need_epilog);
+            break;
+
         case 0x69:
             INST_NAME("IMUL Gd, GS:Ed, Id");
             SETFLAGS(X_ALL, SF_PENDING);
@@ -369,7 +376,7 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             grab_tlsdata(dyn, addr, ninst, x14);
             nextop=F8;
             GETGD;
-            if((nextop&0xC0)==0xC0) {   // reg <= reg
+            if(MODREG) {   // reg <= reg
                 MOV_REG(xEAX+(nextop&7), gd);
             } else {                    // mem <= reg
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 0, 0, 0, NULL);
@@ -383,7 +390,7 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             grab_tlsdata(dyn, addr, ninst, x14);
             nextop=F8;
             GETGD;
-            if((nextop&0xC0)==0xC0) {   // reg <= reg
+            if(MODREG) {   // reg <= reg
                 MOV_REG(gd, xEAX+(nextop&7));
             } else {                    // mem <= reg
                 SMREAD();
@@ -396,7 +403,7 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("POP GS:Ed");
             grab_tlsdata(dyn, addr, ninst, x14);
             nextop = F8;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 POP1((xEAX+(nextop&7)));
             } else {
                 addr = geted(dyn, addr, ninst, nextop, &ed, x1, &fixedaddress, 0, 0, 0, NULL);
@@ -404,6 +411,9 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 STR_REG_LSL_IMM5(x2, ed, x14, 0);
                 SMWRITE2();
             }
+            break;
+        case 0x90:
+            INST_NAME("NOP");
             break;
 
         case 0xA1:
@@ -444,7 +454,7 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV GS:Eb, Ib");
             grab_tlsdata(dyn, addr, ninst, x14);
             nextop=F8;
-            if((nextop&0xC0)==0xC0) {   // reg <= u8
+            if(MODREG) {   // reg <= u8
                 u8 = F8;
                 ed = (nextop&7);
                 eb1 = xEAX+(ed&3);  // Ax, Cx, Dx or Bx
@@ -463,7 +473,7 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV GS:Ed, Id");
             grab_tlsdata(dyn, addr, ninst, x14);
             nextop=F8;
-            if((nextop&0xC0)==0xC0) {   // reg <= i32
+            if(MODREG) {   // reg <= i32
                 i32 = F32S;
                 ed = xEAX+(nextop&7);
                 MOV32(ed, i32);
@@ -501,10 +511,9 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     SETFLAGS(X_OF|X_CF, SF_SET);
                     MOVW(x2, 1);
                     GETEDO2(x14);
-                    wb = ed;
                     if(ed!=x1) {MOV_REG(x1, ed); wb = x1;}
-                    CALL_(rcl32, ed, (1<<x14));
-                    SBACK(wb);
+                    CALL_(rcl32, ed, (1<<x2));
+                    WBACK2;
                     break;
                 case 3:
                     INST_NAME("RCR Ed, 1");
@@ -512,10 +521,9 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     READFLAGS(X_CF);
                     SETFLAGS(X_OF|X_CF, SF_SET);
                     MOVW(x2, 1);
-                    wb = ed;
                     if(ed!=x1) {MOV_REG(x1, ed); wb = x1;}
-                    CALL_(rcr32, ed, (1<<x14));
-                    SBACK(wb);
+                    CALL_(rcr32, ed, (1<<x2));
+                    WBACK2;
                     break;
                 case 4:
                 case 6:
@@ -595,10 +603,9 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     READFLAGS(X_CF);
                     SETFLAGS(X_OF|X_CF, SF_SET);
                     AND_IMM8(x2, xECX, 0x1f);
-                    wb = ed;
                     if(ed!=x1) {MOV_REG(x1, ed); wb = x1;}
-                    CALL_(rcl32, ed, (1<<x14));
-                    SBACK(wb);
+                    CALL_(rcl32, ed, (1<<x2));
+                    WBACK2;
                     break;
                 case 3:
                     INST_NAME("RCR Ed, CL");
@@ -606,10 +613,9 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     READFLAGS(X_CF);
                     SETFLAGS(X_OF|X_CF, SF_SET);
                     AND_IMM8(x2, xECX, 0x1f);
-                    wb = ed;
                     if(ed!=x1) {MOV_REG(x1, ed); wb = x1;}
                     CALL_(rcr32, ed, (1<<x14));
-                    SBACK(wb);
+                    WBACK2;
                     break;
                 case 4:
                 case 6:
@@ -654,7 +660,7 @@ uintptr_t dynarecGS(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             switch((nextop>>3)&7) {
                 case 6: // Push Ed
                     INST_NAME("PUSH GS:Ed");
-                    if((nextop&0xC0)==0xC0) {   // reg
+                    if(MODREG) {   // reg
                         DEFAULT;
                     } else {                    // mem <= i32
                         SMREAD();

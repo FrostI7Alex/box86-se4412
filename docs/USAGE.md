@@ -127,17 +127,28 @@ Enables/Disables trace for generated code.
 Forbid dynablock creation in the interval specified (helpfull for debugging behaviour difference between Dynarec and Interpretor)
  * 0xXXXXXXXX-0xYYYYYYYY : define the interval where dynablock cannot start (inclusive-exclusive)
 
+#### BOX86_DYNAREC_TEST *
+Dynarec will compare it's execution with the interpreter (super slow, only for testing)
+ * 0 : No comparison
+ * 1 : Each opcode runs on interepter and on Dynarec, and regs and memory are compared and print if different
+
 #### BOX86_DYNAREC_BIGBLOCK *
 Enables/Disables Box86's Dynarec building BigBlock.
  * 0 : Don't try to build block as big as possible (can help program using lots of thread and a JIT, like C#/Unity) (Default when libmonobdwgc-2.0.so is loaded)
  * 1 : Build Dynarec block as big as possible (Default.)
  * 2 : Build Dynarec block bigger (don't stop when block overlaps)
 
+#### BOX86_DYNAREC_FORWARD *
+Define Box86's Dynarec max allowed forward value when building Block.
+ * 0 : No forward value. When current block end, don't try to go further even if there are previous forward jumps
+ * XXX : Allow up to XXXX bytes of gap when building a Block after the block end to next forward jump (Default: 128)
+ 
 #### BOX86_DYNAREC_STRONGMEM *
 Enable/Disable simulation of Strong Memory model
 * 0 : Don't try anything special (Default.)
-* 1 : Enable some Memory Barrier when reading from memory (on some MOV opcode) to simulate Strong Memory Model while trying to limit performance impact (Default when libmonobdwgc-2.0.so is loaded)
-* 2 : Enable some Memory Barrier when reading from memory (on some MOV opcode) to simulate Strong Memory Model
+* 1 : Enable some Memory Barrier when writting to memory (on some MOV opcode) to simulate Strong Memory Model while trying to limit performance impact (Default when libmonobdwgc-2.0.so is loaded)
+* 2 : All 1. plus a memory barrier on every write to memory using MOV
+* 3 : All 2. plus Memory Barrier when reading from memory and on some SSE/SSE2 opcodes too
 
 #### BOX86_DYNAREC_X87DOUBLE *
 Force the use of Double for x87 emulation
@@ -149,30 +160,75 @@ Enable/Disable generation of -NAN
 * 0 : Generate -NAN like on x86 (slower, more x86 accurate)
 * 1 : Don't do anything special with NAN, to go as fast as possible (Default)
 
+#### BOX86_DYNAREC_FASTROUND *
+Enable/Disable generation of precise x86 rounding
+* 0 : Generate float/double -> int rounding like on x86
+* 1 : Don't do anything special with edge case Rounding, to go as fast as possible (no INF/NAN/Overflow -> MIN_INT conversion) (faster, Default)
+
 #### BOX86_DYNAREC_SAFEFLAGS *
 Handling of flags on CALL/RET opcodes
 * 0 : Treat CALL/RET as if it never needs any flags (faster but may have side-effects)
 * 1 : most of RET will need flags, most of CALLS will not (Default)
 * 2 : All CALL/RET will need flags (slower, but might be needed. Automatically enabled for Vara.exe)
 
-#### BOX86_DYNAREC_HOTPAGE *
-Handling of HotPage (Page beeing both executed and writen)
-* 0 : Don't track hotpage
-* 1-255 : Trak HotPage, and disable execution of a page beeing writen for N attempts (default is 16)
+#### BOX86_DYNAREC_CALLRET *
+Optimisation of CALL/RET opcodes (not compatible with jit/dynarec/smc)
+* 0 : Don't optimize CALL/RET, use Jump Table for boths (Default)
+* 1 : Try to optimized CALL/RET, skipping the use of the JumpTable when possible
 
 #### BOX86_DYNAREC_BLEEDING_EDGE *
 Detect MonoBleedingEdge and apply conservative settings
 * 0 : Don't detect MonoBleedingEdge
 * 1 : Detect MonoBleedingEdge, and apply BIGBLOCK=0 STRONGMEM=1 if detected (Default)
 
+#### BOX86_DYNAREC_JVM *
+Detect libjvm and apply conservative settings
+* 0 : Don't detect libjvm
+* 1 : Detect libjvm, and apply BIGBLOCK=0 STRONGMEM=1 if detected (Default)
+
+#### BOX86_DYNAREC_WAIT *
+Behavior with FillBlock is not availble (FillBlock build Dynarec blocks and is not multithreaded)
+* 0 : Dynarec will not wait for FillBlock to ready and use Interpreter instead (might speedup a bit massive multithread or JIT programs)
+* 1 : Dynarec will wait for FillBlock to be ready (Default)
+
+#### BOX86_DYNAREC_MISSING *
+Dynarec print the missing opcodes
+* 0 : not print the missing opcode (Default, unless DYNAREC_LOG>=1 or DYNAREC_DUMP>=1 is used)
+* 1 : Will print the missing opcodes
+
+#### BOX86_SSE_FLUSHTO0 *
+Handling of SSE Flush to 0 flags
+* 0 : Just track the flag (Default)
+* 1 : Direct apply of SSE Flush to 0 flag
+
+#### BOX86_X87_NO80BITS *
+Handling of x87 80bits long double
+* 0 : Try to handle 80bits long double as precise as possible (Default)
+* 1 : Handle them as double
+
+#### BOX86_LIBCEF *
+Detect libcef and apply malloc_hack settings
+* 0 : Don't detect libcef
+* 1 : Detect libcef, and apply MALLOC_HACK=2 if detected (Default)
+
+#### BOX86_SDL2_JGUID *
+Need a workaround for SDL_GetJoystickGUIDInfo function for wrapped SDL2
+* 0 : Don't use any workaround
+* 1 : Use a workaround for program that use the private SDL_GetJoystickGUIDInfo function with 1 missing argument
+
+#### BOX86_MUTEX_ALIGNED *
+Will mutex are used as-is or wrapped to handle unaligned used
+* 0 : Mutex will be wrapped in case unaligned mutexes are used (Default)
+* 1 : Do no wrap mutex and use them as-is (faster, but might crash with SEGBUS error)
+
 #### BOX86_LIBGL *
  * libXXXX set the name for libGL (defaults to libGL.so.1).
  * /PATH/TO/libGLXXX : Sets the name and path for libGL
  You can also use SDL_VIDEO_GL_DRIVER
 
-#### BOX86_LD_PRELOAD
+#### BOX86_LD_PRELOAD *
  * XXXX[:YYYYY] force loading XXXX (and YYYY...) libraries with the binary
- PreLoaded libs can be emulated or native, and are treated the same way as if they were comming from the binary
+ PreLoaded libs can be emulated or native, and are treated the same way as if they were comming from the binary (not that using this inside a rcfile might not work if the process needs to be renamed, for example for Wine process)
  
 #### BOX86_EMULATED_LIBS *
  * XXXX[:YYYYY] force lib XXXX (and YYYY...) to be emulated (and not wrapped)
@@ -213,6 +269,11 @@ Disables the loading of wrapped GTK libraries.
 Disables the load of vulkan libraries.
  * 0 : Load vulkan libraries if found.
  * 1 : Disables the load of vulkan libraries, both the native and the i386 version (can be useful on Pi4, where the vulkan driver is not quite there yet.)
+
+#### BOX86_FUTEX_WAITV *
+Use of the new fuext_waitc syscall
+ * 0 : Do not try to use it, return unsupported (Default for BAD_SIGNAL build)
+ * 1 : let program use the syscall if the host system support it (Default for other build)
 
 #### BOX86_ENV
  * XXX=yyyy
@@ -258,6 +319,12 @@ Will use yyyy as x86_64 interpretor, to launch x64_64 binaries
  * 2 : Launch `gdbserver` when a segfault, bus error or illegal instruction signal is trapped, attached to the offending process, and go in an endless loop, waiting.
  Use `gdb /PATH/TO/box86` and then `target remote 127.0.0.1:1234` to connect to the gdbserver (or use actual IP if not on the machine). After that, the procedure is the same as with ` BOX86_JITGDB=1`.
  This mode can be usefullwhen programs redirect all console output to a file (like Unity3D Games)
+ * 3 : Launch `lldb` when a segfault, bus error or illegal instruction signal is trapped, attached to the offending process and go in an endless loop, waiting.
 
 #### BOX86_NORCFILES
 If the env var exist, no rc files (like /etc/box86.box86rc and ~/.box86rc) will be loaded
+
+#### BOX86_NOSANDBOX
+ * 0 : Nothing special
+ * 1 : Added "--no-sandbox" to command line arguments (usefull for chrome based programs)
+

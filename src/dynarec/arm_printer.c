@@ -159,7 +159,7 @@ const char* print_register_list_fpu(uint8_t start, uint8_t size, uint8_t double_
 		start = (start >> 4) + ((start & 0xF) << 1);
 	}
 	
-	char tmp[6];
+	char tmp[7];
 	for (int cur = start; cur < start + size - 1; ++cur) {
 		sprintf(tmp, "%c%d, ", regChr, cur);
 		strcat(ret, tmp);
@@ -3049,7 +3049,7 @@ const char* arm_print(uint32_t opcode) {
 		int param1_1 = (opcode >> 5) & 0x1;
 		int param2_1 = (opcode >> 4) & 0x1;
 		
-		char align[4];
+		char align[5];
 		if (param2_1 == 1) {
 			sprintf(align, ":%d", 16 << size);
 		} else {
@@ -3064,7 +3064,7 @@ const char* arm_print(uint32_t opcode) {
 		int param1_1 = (opcode >> 5) & 0x1;
 		int param2_1 = (opcode >> 4) & 0x1;
 		
-		char align[4];
+		char align[5];
 		if (param2_1 == 1) {
 			sprintf(align, ":%d", 16 << size);
 		} else {
@@ -3080,7 +3080,7 @@ const char* arm_print(uint32_t opcode) {
 		int param1_1 = (opcode >> 5) & 0x1;
 		int param2_1 = (opcode >> 4) & 0x1;
 		
-		char align[4];
+		char align[5];
 		if (param2_1 == 1) {
 			sprintf(align, ":%d", 16 << size);
 		} else {
@@ -3944,6 +3944,18 @@ const char* arm_print(uint32_t opcode) {
 		uint8_t shift = ((opcode >> 4) & 0xFF);
 		
 		sprintf(ret, "TEQ%s %s, %s%s", cond, regname[rn], regname[rm], print_shift(shift, 1));
+	} else if ((opcode&0b00001111111111110000000000000000) == 0b00000010100011110000000000000000) {
+		const char* cond = conds[(opcode >> 28) & 0xF];
+		int rd = (opcode >> 16) & 0xF;
+		uint32_t imm12 = opcode&0b111111111111;
+
+		sprintf(ret, "ADR %s, #0x%x", regname[rd], imm12);
+	} else if ((opcode&0b00001111111111110000000000000000) == 0b00000010010011110000000000000000) {
+		const char* cond = conds[(opcode >> 28) & 0xF];
+		int rd = (opcode >> 16) & 0xF;
+		uint32_t imm12 = opcode&0b111111111111;
+
+		sprintf(ret, "ADR %s, #-0x%x", regname[rd], imm12);
 	} else if ((opcode & 0x0FF000F0) == 0x01400090) {
 		const char* cond = conds[(opcode >> 28) & 0xF];
 		int rt = (opcode >> 12) & 0xF;

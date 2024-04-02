@@ -293,9 +293,9 @@ GO2(execlp, iFpV, execvp)
 GOWM(execv, iFEpp)     //%%
 GOM(execve, iFEppp)   //%% and this one too...
 GOWM(execvp, iFEpp)
-GO(exit, vFi)
-GO(_exit, vFi)
-GOW(_Exit, vFi)
+GOM(exit, vFEi)
+GOM(_exit, vFEi)
+GOWM(_Exit, vFEi)
 GOM(__explicit_bzero_chk, vFEpuu)    //%% not always defined
 GO(faccessat, iFipii)
 // fattach
@@ -348,7 +348,7 @@ GO(fgetws, pFpip)
 // __fgetws_chk
 GO(fgetws_unlocked, pFpip)
 // __fgetws_unlocked_chk
-GO(fgetxattr, iFippu)
+GO(fgetxattr, lFippL)
 GO(fileno, iFp)
 GOW(fileno_unlocked, iFp)
 GOW(finite, iFd)
@@ -409,6 +409,7 @@ GO(freopen64, pFppp)
 // frexpf   // Weak
 // frexpl   // Weak
 GO2(fscanf, iFppV, vfscanf)
+GO2(__isoc23_fscanf, iFppV, vfscanf)
 GO(fseek, iFpli)
 GO(fseeko, iFpli)
 GO(fseeko64, iFpIi)
@@ -622,7 +623,7 @@ GO(getwchar_unlocked, iFv)
 GOW(getwc_unlocked, iFp)
 GO(getwd, pFp)
 // __getwd_chk
-GO(getxattr, iFpppu)
+GO(getxattr, lFpppL)
 GOM(glob, iFEpipp)             //%%
 GOM(glob64, iFEpipp)           //%%
 GO(globfree, vFp)
@@ -902,7 +903,7 @@ GOM(__isoc99_fscanf, iFEppV)  //%%
 // __isoc99_fwscanf
 // __isoc99_scanf
 GOM(__isoc99_sscanf, iFEppV)  //%%
-// __isoc99_swscanf
+GOM(__isoc99_swscanf, iFEppV)  //%%
 GOM(__isoc99_vfscanf, iFEppp) //%%
 // __isoc99_vfwscanf
 // __isoc99_vscanf
@@ -910,12 +911,13 @@ GOM(__isoc99_vsscanf, iFEppp) //%% TODO: check if ok
 // __isoc99_vswscanf
 // __isoc99_vwscanf
 // __isoc99_wscanf
+GO2(__isoc23_sscanf, iFEppV, my___isoc99_sscanf)
 #else
 GO2(__isoc99_fscanf, iFppV, __isoc99_vfscanf)
 // __isoc99_fwscanf
 // __isoc99_scanf
 GO2(__isoc99_sscanf, iFppV, __isoc99_vsscanf)
-// __isoc99_swscanf
+GO2(__isoc99_swscanf, iFppV, __isoc99_vswscanf)
 GO(__isoc99_vfscanf, iFppp)
 // __isoc99_vfwscanf
 // __isoc99_vscanf
@@ -923,6 +925,7 @@ GO(__isoc99_vsscanf, iFppp)
 // __isoc99_vswscanf
 // __isoc99_vwscanf
 // __isoc99_wscanf
+GO2(__isoc23_sscanf, iFppV, __isoc99_sscanf)
 #endif
 GO(isprint, iFi)
 // __isprint_l
@@ -1010,7 +1013,7 @@ GOW(lchown, iFpuu)
 // ldexpl   // Weak
 GOS(ldiv, pFEpii)               //%% return a struct, so address of stuct is on the stack, as a shadow 1st element
 GOM(lfind, pFEpppLp)            //%%
-GO(lgetxattr, iFpppu)
+GO(lgetxattr, lFpppL)
 GOM(__libc_alloca_cutoff, iFEL) //%%
 // __libc_allocate_rtsig
 // __libc_allocate_rtsig_private
@@ -1121,6 +1124,7 @@ GO(memchr, pFpiL)
 GO(memcmp, iFppL)
 GO(memcpy, pFppL)
 GO(__memcpy_chk, pFppuL)
+GO(memfd_create, iFpu)
 // memfrob
 GO(memmem, pFpupu)
 GO(memmove, pFppL)
@@ -1291,7 +1295,7 @@ GO(posix_spawn, iFpppppp)
 // posix_spawnattr_setschedpolicy
 // posix_spawnattr_setsigdefault
 // posix_spawnattr_setsigmask
-// posix_spawn_file_actions_addclose
+GO(posix_spawn_file_actions_addclose, iFpi)
 GO(posix_spawn_file_actions_adddup2, iFpii)
 GO(posix_spawn_file_actions_addopen, iFpipii)
 GO(posix_spawn_file_actions_destroy, iFp)
@@ -1318,7 +1322,7 @@ DATAM(program_invocation_name, 4)
 DATAM(program_invocation_short_name, 4)
 GOW(pselect, iFippppp)
 // psignal
-GO(ptrace, iFiupp)  // will that work???
+GOM(ptrace, iFEiupp)
 GO(ptsname, pFi)
 GOW(ptsname_r, iFipu)
 // __ptsname_r_chk
@@ -1376,10 +1380,10 @@ GOM(read, lFipL) //%%,noE
 GOW(__read, lFipL)
 // readahead    // Weak
 GO(__read_chk, lFipLL)
-GOM(readdir, pFEp)  //%% should also be weak
-GO(readdir64, pFp)  // check if alignement is correct
+GOWM(readdir, pFEp)  //%% should also be weak
+GOW(readdir64, pFp)  // check if alignement is correct
 // readdir64_r
-GOM(readdir_r, iFEppp)  //%% should also be weak
+GOWM(readdir_r, iFEppp)  //%% should also be weak
 GOM(readlink, iFEppL) //%%
 GOM(readlinkat, iFEippL)
 // __readlinkat_chk
@@ -1584,10 +1588,10 @@ GO(sigdelset, iFpi)
 GO(sigemptyset, iFp)
 GO(sigfillset, iFp)
 GO(siggetmask, iFv)
-// sighold
-// sigignore
+GO(sighold, iFi)
+GO(sigignore, iFi)
 GO(siginterrupt, iFii)  // no need to wrap this one?
-// sigisemptyset
+GO(sigisemptyset, iFp)
 GO(sigismember, iFpi)
 // __sigismember
 GOM(siglongjmp, vFEip) //%%
@@ -1595,7 +1599,7 @@ GOWM(signal, pFEip)     //%%
 // signalfd
 GO(__signbit, iFd)
 GO(__signbitf, iFf)
-// sigorset
+GO(sigorset, iFppp)
 // sigpause // Weak
 // __sigpause
 GO(sigpending, iFp)
@@ -1623,7 +1627,7 @@ GOW(socket, iFiii)
 GOW(socketpair, iFiiip)
 GO(splice, iFipipuu)
 GOM(sprintf, iFEppV) //%%
-GOM(__sprintf_chk, iFEpvvpV) //%%
+GOM(__sprintf_chk, iFEpiipV) //%%
 // sprofil  // Weak
 GOW(srand, vFu)
 GO(srand48, vFi)
@@ -1734,6 +1738,7 @@ GO(__strtok_r, pFppp)
 GOW(strtok_r, pFppp)
 // __strtok_r_1c
 GO(strtol, lFppi)
+GO2(__isoc23_strtol, lFppi, strtol)
 #ifdef HAVE_LD80BITS
 GO(strtold, DFpp)
 GO(__strtold_internal, DFppi)
@@ -1747,19 +1752,23 @@ GOW2(strtold_l, KFppu, strtod_l)
 #endif
 GO(__strtol_internal, lFppi)
 GO(strtoll, IFppi)
+GO2(__isoc23_strtoll, IFppi, strtoll)
 GO(__strtol_l, lFppiip)
 GOW(strtol_l, lFppiip)
 GO(__strtoll_internal, IFppii)
 GO(__strtoll_l, IFppip)
 GOW(strtoll_l, IFppip)
+GO2(__isoc23_strtoll_l, IFppip, strtoll_l)
 GOW(strtoq, IFppi)  // is that ok?
 GO(strtoul, LFppi)
 GO(__strtoul_internal, LFppii)
 GO(strtoull, UFppi)
+GO2(__isoc23_strtoull, UFppi, strtoull)
 GO(__strtoul_l, uFppip)
 GOW(strtoul_l, LFppip)
 GO(__strtoull_internal, UFppii)
 GO(__strtoull_l, UFppip)
+GO2(__isoc23_strtoull_l, UFppip, strtoull_l)
 GOW(strtoull_l, UFppip)
 GO(strtoumax, UFppi)
 GOW(strtouq, UFppi) // ok?
@@ -1809,9 +1818,9 @@ GO(symlinkat, iFpip)
 GO(sync, vFv)
 GO(syncfs, iFi)
 // sync_file_range
-GOM(syscall, uFEv) //%%
-GOW(sysconf, lFi)
-GO(__sysconf, lFi)
+GOM(syscall, lFEv) //%%
+GOM(sysconf, lFEi)
+GOM(__sysconf, lFEi)
 // sysctl   // Weak
 GO(__sysctl, iFp)
 DATA(_sys_errlist, 4)
@@ -1947,7 +1956,7 @@ GOM(__vprintf_chk, iFEvpp)        //%%
 // vscanf   // Weak
 GOWM(vsnprintf, iFEpLppp)         //%%
 GOWM(__vsnprintf, iFEpuppp)       //%%
-GOM(__vsnprintf_chk, iFEpuvvppp)  //%%
+GOM(__vsnprintf_chk, iFEpuiippp)  //%%
 GOWM(vsprintf, iFEppp)            //%%
 GOM(__vsprintf_chk, iFEpiLpp)     //%% 
 #ifdef POWERPCLE
@@ -2040,8 +2049,8 @@ GO(wcstoll, IFppi)
 // __wcstoll_internal
 // __wcstoll_l
 // wcstoll_l    // Weak
-GO(wcstombs, uFppu)
-// __wcstombs_chk
+GO(wcstombs, LFppL)
+GO(__wcstombs_chk, LFppLL)
 // wcstoq   // Weak
 GO(wcstoul, iFppi)
 GO(__wcstoul_internal, LFppii)
@@ -2189,7 +2198,6 @@ GOM(getauxval, uFEu)  //%% implemented since glibc 2.16
 GOM(prlimit64, lFpupp)       //%%,noE
 GO(process_vm_readv, lFipLpLL)
 GO(process_vm_writev, lFipLpLL)
-GOM(reallocarray, pFpLL)     //%%,noE
 GOM(__open_nocancel, iFEpOV) //%%
 GO2(__read_nocancel, lFipL, read)
 GO2(__close_nocancel, iFi, close)
@@ -2214,8 +2222,6 @@ GOM(__divdi3, IFII)         //%%,noE
 GOM(__poll_chk, iFpuii)     //%%,noE
 
 GOM(fallocate64, iFiiII)    //%%,noE
-
-DATAM(__libc_stack_end, sizeof(void*))
 
 DATAM(___brk_addr, 4)
 DATA(__libc_enable_secure, 4)
@@ -2250,9 +2256,13 @@ GO(__utimensat_time64, iFippi)
 
 GOM(fstatat64, iFippi)  //%%,noE
 GOM(fstat64, iFip)  //%%,noE
+GOM(fstatat, iFippi)  //%%,noE
+
+DATAM(__libc_single_threaded, 1)
 
 GOWM(_Unwind_Find_FDE, pFEpp)    // this is a libgcc_s function, I think. Create a dummy weak one, just in case
 GO(dummy__ZnwmSt11align_val_tRKSt9nothrow_t, pFLLp) // for mallochook.c
+GO(dummy_safer_scalable_aligned_realloc, pFpLLp)    // for mallochook.c
 
 #ifdef ANDROID
 GOM(__libc_init, vFEpppp)
@@ -2260,8 +2270,6 @@ GOM(stat, iFpp)             //%noE
 GOM(lstat, iFpp)            //%noE
 GOM(fstat, iFip)            //%noE
 GO(__errno, pFv)
-GO(setprogname, vFp)
-GO(getprogname, pFv)
 #include "wrappedlibpthread_private.h"
 #include "wrappedlibrt_private.h"
 #else
@@ -2271,6 +2279,4 @@ GO(getprogname, pFv)
 //GOM(lstat,
 //GOM(fstat,
 //GO(__errno,
-//GO(setprogname,
-//GO(getprogname,
 #endif

@@ -41,10 +41,10 @@ GO(4)
 
 // chunkfun
 #define GO(A)   \
-static uintptr_t my_chunkfun_fct_##A = 0;                                      \
-static void* my_chunkfun_##A(size_t a) \
-{                                                                               \
-    return (void*)RunFunction(my_context, my_chunkfun_fct_##A, 1, a);            \
+static uintptr_t my_chunkfun_fct_##A = 0;                                   \
+static void* my_chunkfun_##A(size_t a)                                      \
+{                                                                           \
+    return (void*)RunFunctionFmt(my_chunkfun_fct_##A, "L", a);  \
 }
 SUPER()
 #undef GO
@@ -74,10 +74,10 @@ static void* reverse_chunkfunFct(library_t* lib, void* fct)
 }
 // freefun
 #define GO(A)   \
-static uintptr_t my_freefun_fct_##A = 0;                \
-static void my_freefun_##A(void* a)                     \
-{                                                       \
-    RunFunction(my_context, my_freefun_fct_##A, 1, a);  \
+static uintptr_t my_freefun_fct_##A = 0;                    \
+static void my_freefun_##A(void* a)                         \
+{                                                           \
+    RunFunctionFmt(my_freefun_fct_##A, "p", a); \
 }
 SUPER()
 #undef GO
@@ -189,6 +189,7 @@ EXPORT void my__obstack_newchunk(struct i386_obstack* obstack, int s)
 
 EXPORT int32_t my_obstack_vprintf(x86emu_t* emu, struct i386_obstack* obstack, void* fmt, uint32_t* b, va_list V)
 {
+    (void)emu; (void)V;
     struct obstack native = {0};
     from_i386_obstack(obstack, &native);
     #ifndef NOALIGN
@@ -210,7 +211,7 @@ void actual_obstack_alloc_failed_handler()
 {
     if(ref_obstack_alloc_failed_handler == my_obstack_alloc_failed_handler)
         real_obstack_alloc_failed_handler();
-    RunFunction(my_context, (uintptr_t)my_obstack_alloc_failed_handler, 0);
+    RunFunctionFmt((uintptr_t)my_obstack_alloc_failed_handler, "");
 }
 void obstackSetup()
 {

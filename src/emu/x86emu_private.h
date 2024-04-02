@@ -23,11 +23,38 @@ typedef struct forkpty_s {
     void*   f;  // forkpty function
 } forkpty_t;
 
+typedef struct x86emu_s x86emu_t;
+
+typedef struct x86test_s {
+    x86emu_t*   emu;
+    uintptr_t   memaddr;
+    int         memsize;
+    int         test;
+    int         clean;
+    uint8_t     mem[16];
+} x86test_t;
+
+typedef struct emu_flags_s {
+    uint32_t    need_jmpbuf:1;    // need a new jmpbuff for signal handling
+    uint32_t    quitonlongjmp:2;  // quit if longjmp is called
+    uint32_t    quitonexit:2;     // quit if exit/_exit is called
+    uint32_t    longjmp:1;        // if quit because of longjmp
+    uint32_t    jmpbuf_ready:1;   // the jmpbuf in the emu is ok and don't need refresh
+} emu_flags_t;
+
+#ifdef ANDROID
+#include <setjmp.h>
+#define JUMPBUFF sigjmp_buf
+#else
+#define JUMPBUFF struct __jmp_buf_tag
+#endif
+
 typedef struct x86emu_s {
     // cpu
 	reg32_t     regs[8];
 	x86flags_t  eflags;
     reg32_t     ip;
+    uintptr_t   xSPSave;
     // fpu / mmx
 	x87control_t cw;
 	x87flags_t  sw;
@@ -40,7 +67,7 @@ typedef struct x86emu_s {
 	fpu_p_reg_t p_regs[8];
     // sse
     sse_regs_t  xmm[8];
-    uint32_t    mxcsr;
+    mmxcontrol_t mxcsr;
     uintptr_t   old_ip;
     // defered flags
     defered_flags_t df;
@@ -52,17 +79,18 @@ typedef struct x86emu_s {
     uintptr_t   prev2_ip, prev_ip;
     #endif
     // segments
-    uint32_t    segs[6];        // only 32bits value?
+    uint16_t    segs[6];
+    uint16_t    dummy_seg6, dummy_seg7; // to stay aligned
     uintptr_t   segs_offs[6];   // computed offset associate with segment
     uint32_t    segs_serial[6];  // are seg offset clean (not 0) or does they need to be re-computed (0)? For GS, serial need to be the same as context->sel_serial
     // emu control
     int         quit;
     int         error;
     int         fork;   // quit because need to fork
-    forkpty_t*  forkpty_info;
     int         exit;
-    int         quitonlongjmp;  // quit if longjmp is called
-    int         longjmp;        // if quit because of longjmp
+    forkpty_t*  forkpty_info;
+    emu_flags_t flags;
+    x86test_t   test;       // used for dynarec testing
     // parent context
     box86context_t *context;
     // cpu helpers
@@ -74,6 +102,8 @@ typedef struct x86emu_s {
     void*       stack2free; // this is the stack to free (can be NULL)
     void*       init_stack; // initial stack (owned or not)
     uint32_t    size_stack; // stack size (owned or not)
+    JUMPBUFF*   jmpbuf;
+    uintptr_t   old_savedsp;
 
     i386_ucontext_t *uc_link; // to handle setcontext
 
@@ -87,5 +117,7 @@ typedef struct x86emu_s {
 
 //#define INTR_RAISE_DIV0(emu) {emu->error |= ERR_DIVBY0; emu->quit=1;}
 #define INTR_RAISE_DIV0(emu) {emu->error |= ERR_DIVBY0;} // should rise a SIGFPE and not quit
+
+void applyFlushTo0(x86emu_t* emu);
 
 #endif //__X86EMU_PRIVATE_H_

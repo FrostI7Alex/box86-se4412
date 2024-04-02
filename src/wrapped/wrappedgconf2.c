@@ -35,10 +35,10 @@ GO(4)
 
 // GFreeFunc ...
 #define GO(A)   \
-static uintptr_t my_GFreeFunc_fct_##A = 0;                  \
-static void my_GFreeFunc_##A(void* a)                       \
-{                                                           \
-    RunFunction(my_context, my_GFreeFunc_fct_##A, 1, a);    \
+static uintptr_t my_GFreeFunc_fct_##A = 0;                      \
+static void my_GFreeFunc_##A(void* a)                           \
+{                                                               \
+    RunFunctionFmt(my_GFreeFunc_fct_##A, "p", a);   \
 }
 SUPER()
 #undef GO
@@ -57,10 +57,10 @@ static void* find_GFreeFunc_Fct(void* fct)
 }
 // GConfClientNotifyFunc ...
 #define GO(A)   \
-static uintptr_t my_GConfClientNotifyFunc_fct_##A = 0;                          \
-static void my_GConfClientNotifyFunc_##A(void* a, uint32_t b, void* c, void* d) \
-{                                                                               \
-    RunFunction(my_context, my_GConfClientNotifyFunc_fct_##A, 4, a, b, c, d);   \
+static uintptr_t my_GConfClientNotifyFunc_fct_##A = 0;                                  \
+static void my_GConfClientNotifyFunc_##A(void* a, uint32_t b, void* c, void* d)         \
+{                                                                                       \
+    RunFunctionFmt(my_GConfClientNotifyFunc_fct_##A, "pupp", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -82,7 +82,8 @@ static void* find_GConfClientNotifyFunc_Fct(void* fct)
 
 EXPORT uint32_t my_gconf_client_notify_add(x86emu_t* emu, void* client, void* section, void* func, void* data, void* destroy, void* err)
 {
-    my->gconf_client_notify_add(client, section, find_GConfClientNotifyFunc_Fct(func), data, find_GFreeFunc_Fct(destroy), err);
+    (void)emu;
+    return my->gconf_client_notify_add(client, section, find_GConfClientNotifyFunc_Fct(func), data, find_GFreeFunc_Fct(destroy), err);
 }
 
 #define PRE_INIT    \
@@ -96,4 +97,3 @@ EXPORT uint32_t my_gconf_client_notify_add(x86emu_t* emu, void* client, void* se
     freeMy();
 
 #include "wrappedlib_init.h"
-

@@ -24,6 +24,7 @@
 #include "x86trace.h"
 #endif
 #include "x86tls.h"
+#include "x86emu.h"
 
 #define PARITY(x)   (((emu->x86emu_parity_tab[(x) / 32] >> ((x) % 32)) & 1) == 0)
 #define XOR2(x) 	(((x) ^ ((x)>>1)) & 0x1)
@@ -48,8 +49,9 @@ void EXPORT my___libc_init(x86emu_t* emu, void* raw_args __unused, void (*onexit
     emu->quit = 1; // finished!
 }
 #else
-int32_t EXPORT my___libc_start_main(x86emu_t* emu, int *(main) (int, char * *, char * *), int argc, char * * ubp_av, void (*init) (void), void (*fini) (void), void (*rtld_fini) (void), void (* stack_end))
+int32_t EXPORT my___libc_start_main(x86emu_t* emu, int (*main) (int, char * *, char * *), int argc, char * * ubp_av, void (*init) (void), void (*fini) (void), void (*rtld_fini) (void), void (* stack_end))
 {
+    (void)argc; (void)ubp_av; (void)fini; (void)rtld_fini; (void)stack_end;
     // let's cheat and set all args...
     Push(emu, (uint32_t)my_context->envv);
     Push(emu, (uint32_t)my_context->argv);
@@ -57,11 +59,16 @@ int32_t EXPORT my___libc_start_main(x86emu_t* emu, int *(main) (int, char * *, c
     if(init) {
         PushExit(emu);
         R_EIP=(uint32_t)*init;
-        printf_log(LOG_DEBUG, "Calling init(%p) from __libc_start_main\n", *init);
+        printf_dump(LOG_DEBUG, "Calling init(%p) from __libc_start_main\n", *init);
         DynaRun(emu);
         if(emu->error)  // any error, don't bother with more
             return 0;
         emu->quit = 0;
+    } else {
+        if(my_context->elfs[0]) {
+            printf_dump(LOG_DEBUG, "Calling init from main elf\n");
+            RunElfInit(my_context->elfs[0], emu);
+        }
     }
     MarkElfInitDone(my_context->elfs[0]);
     printf_log(LOG_DEBUG, "Transfert to main(%d, %p, %p)=>%p from __libc_start_main\n", my_context->argc, my_context->argv, my_context->envv, main);
@@ -455,6 +462,8 @@ void UpdateFlags(x86emu_t *emu)
                     CONDITIONAL_SET_FLAG((emu->res & 0xff) == 0, F_ZF);
                     CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
                     CONDITIONAL_SET_FLAG(emu->res & 0x80, F_SF);
+                    if(emu->op2==1)
+                        CLEAR_FLAG(F_OF);
                 }
             } else {
                 if (emu->op1&0x80) {
@@ -478,6 +487,8 @@ void UpdateFlags(x86emu_t *emu)
                     CONDITIONAL_SET_FLAG((emu->res & 0xffff) == 0, F_ZF);
                     CONDITIONAL_SET_FLAG(emu->res & 0x8000, F_SF);
                     CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
+                    if(emu->op2==1)
+                        CLEAR_FLAG(F_OF);
                 }
             } else {
                 if (emu->op1&0x8000) {
@@ -500,6 +511,8 @@ void UpdateFlags(x86emu_t *emu)
                 CONDITIONAL_SET_FLAG(emu->res == 0, F_ZF);
                 CONDITIONAL_SET_FLAG(emu->res & 0x80000000, F_SF);
                 CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
+                if(emu->op2==1)
+                    CLEAR_FLAG(F_OF);
             }
             break;
         case d_shr8:
@@ -513,7 +526,7 @@ void UpdateFlags(x86emu_t *emu)
                     CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
                 }
                 if (cnt == 1) {
-                    CONDITIONAL_SET_FLAG(XOR2(emu->res >> 6), F_OF);
+                    CONDITIONAL_SET_FLAG(emu->op1 & 0x80, F_OF);
                 }
             } else {
                 CONDITIONAL_SET_FLAG((emu->op1 >> (emu->op2-1)) & 0x1, F_CF);
@@ -533,7 +546,7 @@ void UpdateFlags(x86emu_t *emu)
                     CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
                 }
                 if (cnt == 1) {
-                    CONDITIONAL_SET_FLAG(XOR2(emu->res >> 14), F_OF);
+                    CONDITIONAL_SET_FLAG(emu->op1 & 0x8000, F_OF);
                 }
             } else {
                 CLEAR_FLAG(F_CF);
@@ -552,7 +565,35 @@ void UpdateFlags(x86emu_t *emu)
                 CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
             }
             if (cnt == 1) {
-                CONDITIONAL_SET_FLAG(XOR2(emu->res >> 30), F_OF);
+                CONDITIONAL_SET_FLAG(emu->op1 & 0x80000000, F_OF);
+            }
+            break;
+        case d_shrd32:
+            cnt = emu->op2;
+            if (cnt > 0) {
+                cc = emu->op1 & (1 << (cnt - 1));
+                CONDITIONAL_SET_FLAG(cc, F_CF);
+                CONDITIONAL_SET_FLAG(!emu->res, F_ZF);
+                CONDITIONAL_SET_FLAG(emu->res & 0x80000000, F_SF);
+                CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
+                if (cnt == 1) {
+                    CONDITIONAL_SET_FLAG((emu->op1 ^ emu->res) & 0x80000000, F_OF);
+                }
+            }
+            break;
+        case d_shld32:
+            cnt = emu->op2;
+            if (cnt > 0) {
+                cc = emu->op1 & (1 << (32 - cnt));
+                CONDITIONAL_SET_FLAG(cc, F_CF);
+                CONDITIONAL_SET_FLAG(!emu->res, F_ZF);
+                CONDITIONAL_SET_FLAG(emu->res & 0x80000000, F_SF);
+                CONDITIONAL_SET_FLAG(PARITY(emu->res & 0xff), F_PF);
+                if (cnt == 1) {
+                    CONDITIONAL_SET_FLAG((emu->op1 ^ emu->res) & 0x80000000, F_OF);
+                } else {
+                    CLEAR_FLAG(F_OF);
+                }
             }
             break;
         case d_sub8:
@@ -818,7 +859,7 @@ uintptr_t evalED(x86emu_t* emu, uintptr_t ip) {
             if((nextop&7)==4) {
                 uint8_t sib = PK(0);
                 ++ip;
-                uintptr_t base = ((sib&0x7)==5)?(PK32(0)):(emu->regs[(sib&0x7)].dword[0]);
+                uintptr_t base = ((sib&0x7)==5)?(uint32_t)(PK32(0)):(emu->regs[(sib&0x7)].dword[0]);
                 base += (emu->sbiidx[(sib>>3)&7]->sdword[0] << (sib>>6)); \
                 return *(uintptr_t*)base;
             } else if((nextop&7)==5) {
@@ -852,7 +893,7 @@ void PrintTrace(x86emu_t* emu, uintptr_t ip, int dynarec)
             (trace_end == 0) 
             || ((ip >= trace_start) && (ip < trace_end))) ) {
         int tid = syscall(SYS_gettid);
-        pthread_mutex_lock(&my_context->mutex_trace);
+        mutex_lock(&my_context->mutex_trace);
 #ifdef DYNAREC
         if((my_context->trace_tid != tid) || (my_context->trace_dynarec!=dynarec)) {
             printf_log(LOG_NONE, "Thread %04d| (%s) |\n", tid, dynarec?"dyn":"int");
@@ -881,6 +922,7 @@ void PrintTrace(x86emu_t* emu, uintptr_t ip, int dynarec)
                 printFunctionAddr(*(uintptr_t*)(R_ESP), "=> ");
             } else if(peek==0x55) {
                 printf_log(LOG_NONE, " => STACK_TOP: %p", *(void**)(R_ESP));
+                printFunctionAddr(*(uintptr_t*)(R_ESP), "top:");
                 printFunctionAddr(ip, "here: ");
             } else if(peek==0xE8) { // Call
                 uintptr_t nextaddr = ip + 5 + PK32(1);
@@ -889,13 +931,13 @@ void PrintTrace(x86emu_t* emu, uintptr_t ip, int dynarec)
                 const uint8_t pk1 = PK(1);
                 if(((pk1>>3)&7)==2 || ((pk1>>3)&7)==4) { // jmp/call near
                     uintptr_t nextaddr = (uintptr_t)getAlternate((void*)evalED(emu, ip+1));
-                    printf_log(LOG_NONE, " => %p", nextaddr);
+                    printf_log(LOG_NONE, " => %p", (void*)nextaddr);
                     printFunctionAddr(nextaddr, " / ");
                 }
             }
             printf_log(LOG_NONE, "\n");
         }
-        pthread_mutex_unlock(&my_context->mutex_trace);
+        mutex_unlock(&my_context->mutex_trace);
     }
 }
 

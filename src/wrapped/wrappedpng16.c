@@ -44,10 +44,10 @@ GO(3)
 
 // user_write
 #define GO(A)   \
-static uintptr_t my_user_write_fct_##A = 0;   \
-static void my_user_write_##A(void* png_ptr, void* data, int32_t length)    \
-{                                       \
-    RunFunction(my_context, my_user_write_fct_##A, 3, png_ptr, data, length);\
+static uintptr_t my_user_write_fct_##A = 0;                                         \
+static void my_user_write_##A(void* png_ptr, void* data, int32_t length)            \
+{                                                                                   \
+    RunFunctionFmt(my_user_write_fct_##A, "ppi", png_ptr, data, length);\
 }
 SUPER()
 #undef GO
@@ -66,10 +66,10 @@ static void* finduser_writeFct(void* fct)
 }
 // user_flush
 #define GO(A)   \
-static uintptr_t my_user_flush_fct_##A = 0;   \
-static void my_user_flush_##A(void* png_ptr)    \
-{                                       \
-    RunFunction(my_context, my_user_flush_fct_##A, 1, png_ptr);\
+static uintptr_t my_user_flush_fct_##A = 0;                         \
+static void my_user_flush_##A(void* png_ptr)                        \
+{                                                                   \
+    RunFunctionFmt(my_user_flush_fct_##A, "p", png_ptr);\
 }
 SUPER()
 #undef GO
@@ -88,10 +88,10 @@ static void* finduser_flushFct(void* fct)
 }
 // user_read
 #define GO(A)   \
-static uintptr_t my_user_read_fct_##A = 0;   \
-static void my_user_read_##A(void* png_ptr, void* data, size_t length)    \
-{                                       \
-    RunFunction(my_context, my_user_read_fct_##A, 3, png_ptr, data, length);\
+static uintptr_t my_user_read_fct_##A = 0;                                          \
+static void my_user_read_##A(void* png_ptr, void* data, size_t length)              \
+{                                                                                   \
+    RunFunctionFmt(my_user_read_fct_##A, "ppL", png_ptr, data, length); \
 }
 SUPER()
 #undef GO
@@ -110,10 +110,10 @@ static void* finduser_readFct(void* fct)
 }
 // error
 #define GO(A)   \
-static uintptr_t my_error_fct_##A = 0;   \
-static void my_error_##A(void* a, void* b)    \
-{                                       \
-    RunFunction(my_context, my_error_fct_##A, 2, a, b);\
+static uintptr_t my_error_fct_##A = 0;                          \
+static void my_error_##A(void* a, void* b)                      \
+{                                                               \
+    RunFunctionFmt(my_error_fct_##A, "pp", a, b);   \
 }
 SUPER()
 #undef GO
@@ -132,10 +132,10 @@ static void* finderrorFct(void* fct)
 }
 // warning
 #define GO(A)   \
-static uintptr_t my_warning_fct_##A = 0;   \
-static void my_warning_##A(void* a, void* b)    \
-{                                       \
-    RunFunction(my_context, my_warning_fct_##A, 2, a, b);\
+static uintptr_t my_warning_fct_##A = 0;                        \
+static void my_warning_##A(void* a, void* b)                    \
+{                                                               \
+    RunFunctionFmt(my_warning_fct_##A, "pp", a, b); \
 }
 SUPER()
 #undef GO
@@ -154,10 +154,10 @@ static void* findwarningFct(void* fct)
 }
 // malloc
 #define GO(A)   \
-static uintptr_t my_malloc_fct_##A = 0;   \
-static void my_malloc_##A(void* a, unsigned long b)    \
-{                                       \
-    RunFunction(my_context, my_malloc_fct_##A, 2, a, b);\
+static uintptr_t my_malloc_fct_##A = 0;                         \
+static void my_malloc_##A(void* a, unsigned long b)             \
+{                                                               \
+    RunFunctionFmt(my_malloc_fct_##A, "pL", a, b);  \
 }
 SUPER()
 #undef GO
@@ -176,10 +176,10 @@ static void* findmallocFct(void* fct)
 }
 // free
 #define GO(A)   \
-static uintptr_t my_free_fct_##A = 0;   \
-static void my_free_##A(void* a, void* b)    \
-{                                       \
-    RunFunction(my_context, my_free_fct_##A, 2, a, b);\
+static uintptr_t my_free_fct_##A = 0;                       \
+static void my_free_##A(void* a, void* b)                   \
+{                                                           \
+    RunFunctionFmt(my_free_fct_##A, "pp", a, b);\
 }
 SUPER()
 #undef GO
@@ -199,10 +199,10 @@ static void* findfreeFct(void* fct)
 
 // progressive_info
 #define GO(A)   \
-static uintptr_t my_progressive_info_fct_##A = 0;   \
-static void my_progressive_info_##A(void* a, void* b)    \
-{                                       \
-    RunFunction(my_context, my_progressive_info_fct_##A, 2, a, b);\
+static uintptr_t my_progressive_info_fct_##A = 0;                       \
+static void my_progressive_info_##A(void* a, void* b)                   \
+{                                                                       \
+    RunFunctionFmt(my_progressive_info_fct_##A, "pp", a, b);\
 }
 SUPER()
 #undef GO
@@ -222,10 +222,10 @@ static void* findprogressive_infoFct(void* fct)
 
 // progressive_end
 #define GO(A)   \
-static uintptr_t my_progressive_end_fct_##A = 0;   \
-static void my_progressive_end_##A(void* a, void* b)    \
-{                                       \
-    RunFunction(my_context, my_progressive_end_fct_##A, 2, a, b);\
+static uintptr_t my_progressive_end_fct_##A = 0;                        \
+static void my_progressive_end_##A(void* a, void* b)                    \
+{                                                                       \
+    RunFunctionFmt(my_progressive_end_fct_##A, "pp", a, b); \
 }
 SUPER()
 #undef GO
@@ -245,10 +245,10 @@ static void* findprogressive_endFct(void* fct)
 
 // progressive_row
 #define GO(A)   \
-static uintptr_t my_progressive_row_fct_##A = 0;   \
-static void my_progressive_row_##A(void* a, void* b, uint32_t c, int d)    \
-{                                       \
-    RunFunction(my_context, my_progressive_row_fct_##A, 4, a, b, c, d);\
+static uintptr_t my_progressive_row_fct_##A = 0;                                \
+static void my_progressive_row_##A(void* a, void* b, uint32_t c, int d)         \
+{                                                                               \
+    RunFunctionFmt(my_progressive_row_fct_##A, "ppui", a, b, c, d); \
 }
 SUPER()
 #undef GO
@@ -269,10 +269,10 @@ static void* findprogressive_rowFct(void* fct)
 
 // user_transform
 #define GO(A)   \
-static uintptr_t my_user_transform_fct_##A = 0;   \
-static void my_user_transform_##A(void* ptr, void* row, void* data)    \
-{                                       \
-    RunFunction(my_context, my_user_transform_fct_##A, 3, ptr, row, data);\
+static uintptr_t my_user_transform_fct_##A = 0;                                     \
+static void my_user_transform_##A(void* ptr, void* row, void* data)                 \
+{                                                                                   \
+    RunFunctionFmt(my_user_transform_fct_##A, "ppp", ptr, row, data);   \
 }
 SUPER()
 #undef GO
@@ -327,41 +327,49 @@ int png16_setjmp(x86emu_t* emu, /*struct __jmp_buf_tag __env[1]*/void *p)
 
 EXPORT void my16_png_set_read_fn(x86emu_t *emu, void* png_ptr, void* io_ptr, void* read_data_fn)
 {
+    (void)emu;
     my->png_set_read_fn(png_ptr, io_ptr, finduser_readFct(read_data_fn));
 }
 
 EXPORT void my16_png_set_read_user_transform_fn(x86emu_t *emu, void* png_ptr, void* read_transform_fn)
 {
+    (void)emu;
     my->png_set_read_user_transform_fn(png_ptr, finduser_transformFct(read_transform_fn));
 }
 
 EXPORT void my16_png_set_error_fn(x86emu_t* emu, void* pngptr, void* errorptr, void* error_fn, void* warning_fn)
 {
+    (void)emu;
     my->png_set_error_fn(pngptr, errorptr, finderrorFct(error_fn), findwarningFct(warning_fn));
 }
 
 EXPORT void my16_png_set_write_fn(x86emu_t* emu, void* png_ptr, void* io_ptr, void* write_fn, void* flush_fn)
 {
+    (void)emu;
     my->png_set_write_fn(png_ptr, io_ptr, finduser_writeFct(write_fn), finduser_flushFct(flush_fn));
 }
 
 EXPORT void* my16_png_create_read_struct_2(x86emu_t* emu, void* user_png_ver, void* error_ptr, void* error_fn, void* warn_fn, void* mem_ptr, void* malloc_fn, void* free_fn)
 {
+    (void)emu;
     return my->png_create_read_struct_2(user_png_ver, error_ptr, finderrorFct(error_fn), findwarningFct(warn_fn), mem_ptr, findmallocFct(malloc_fn), findfreeFct(free_fn));
 }
 
 EXPORT void* my16_png_create_write_struct_2(x86emu_t* emu, void* user_png_ver, void* error_ptr, void* error_fn, void* warn_fn, void* mem_ptr, void* malloc_fn, void* free_fn)
 {
+    (void)emu;
     return my->png_create_write_struct_2(user_png_ver, error_ptr, finderrorFct(error_fn), findwarningFct(warn_fn), mem_ptr, findmallocFct(malloc_fn), findfreeFct(free_fn));
 }
 
 EXPORT void my16_png_set_progressive_read_fn(x86emu_t* emu, void* png_ptr, void* user_ptr, void* info, void* row, void* end)
 {
+    (void)emu;
     my->png_set_progressive_read_fn(png_ptr, user_ptr, findprogressive_infoFct(info), findprogressive_rowFct(row), findprogressive_endFct(end));
 }
 
 EXPORT void* my16_png_create_read_struct(x86emu_t* emu, void* png_ptr, void* user_ptr, void* errorfn, void* warnfn)
 {
+    (void)emu;
     void* ret = my->png_create_read_struct(png_ptr, user_ptr, finderrorFct(errorfn), findwarningFct(warnfn));
     current_png_struct = ret;
     return ret;
@@ -369,6 +377,7 @@ EXPORT void* my16_png_create_read_struct(x86emu_t* emu, void* png_ptr, void* use
 
 EXPORT void* my16_png_create_write_struct(x86emu_t* emu, void* png_ptr, void* user_ptr, void* errorfn, void* warnfn)
 {
+    (void)emu;
     void* ret = my->png_create_write_struct(png_ptr, user_ptr, finderrorFct(errorfn), findwarningFct(warnfn));
     current_png_struct = ret;
     return ret;
@@ -376,12 +385,14 @@ EXPORT void* my16_png_create_write_struct(x86emu_t* emu, void* png_ptr, void* us
 
 EXPORT void my16_png_destroy_read_struct(x86emu_t* emu, void** png_ptr, void** info_ptr, void** end_info_ptr)
 {
+    (void)emu;
     if(png_ptr && *png_ptr==current_png_struct)
         current_png_struct = NULL;
     my->png_destroy_read_struct(png_ptr, info_ptr, end_info_ptr);
 }
 EXPORT void my16_png_destroy_write_struct(x86emu_t* emu, void** png_ptr, void** info_ptr)
 {
+    (void)emu;
     if(png_ptr && *png_ptr==current_png_struct)
         current_png_struct = NULL;
     my->png_destroy_write_struct(png_ptr, info_ptr);

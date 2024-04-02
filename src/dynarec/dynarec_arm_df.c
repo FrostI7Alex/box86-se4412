@@ -161,7 +161,7 @@ uintptr_t dynarecDF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             switch((nextop>>3)&7) {
                 case 0:
                     INST_NAME("FILD ST0, Ew");
-                    v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+                    v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 255, 0, 0, NULL);
                     LDRSH_IMM8(x1, wback, fixedaddress);
                     if(ST_IS_F(0)) {
@@ -175,7 +175,7 @@ uintptr_t dynarecDF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 1:
                     INST_NAME("FISTTP Ew, ST0");
-                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, NEON_CACHE_ST_F);
+                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
                     addr = geted(dyn, addr, ninst, nextop, &wback, x2, &fixedaddress, 255, 0, 0, NULL);
                     ed = x1;
                     s0 = fpu_get_scratch_single(dyn);
@@ -202,16 +202,12 @@ uintptr_t dynarecDF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 2:
                     INST_NAME("FIST Ew, ST0");
-                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, NEON_CACHE_ST_F);
-                    u8 = x87_setround(dyn, ninst, x1, x2, x14);
+                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
+                    u8 = x87_setround_reset(dyn, ninst, x1, x2, x14);
                     addr = geted(dyn, addr, ninst, nextop, &wback, x2, &fixedaddress, 255, 0, 0, NULL);
                     ed = x1;
                     s0 = fpu_get_scratch_single(dyn);
                     MSR_nzcvq_0();
-                    // x1 already have FPCSR reg to clear exceptions flags
-                    ORR_IMM8(x3, x1, 0b010, 9); // enable exceptions
-                    BIC_IMM8(x3, x3, 0b10011111, 0);
-                    VMSR(x3);
                     if(ST_IS_F(0)) {
                         VCVTR_S32_F32(s0, v1);
                     } else {
@@ -228,16 +224,12 @@ uintptr_t dynarecDF(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 3:
                     INST_NAME("FISTP Ew, ST0");
-                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, NEON_CACHE_ST_F);
-                    u8 = x87_setround(dyn, ninst, x1, x2, x14);
+                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
+                    u8 = x87_setround_reset(dyn, ninst, x1, x2, x14);
                     addr = geted(dyn, addr, ninst, nextop, &wback, x2, &fixedaddress, 255, 0, 0, NULL);
                     ed = x1;
                     s0 = fpu_get_scratch_single(dyn);
                     MSR_nzcvq_0();
-                    // x1 already have FPCSR reg to clear exceptions flags
-                    ORR_IMM8(x3, x1, 0b010, 9); // enable exceptions
-                    BIC_IMM8(x3, x3, 0b10011111, 0);
-                    VMSR(x3);
                     if(ST_IS_F(0)) {
                         VCVTR_S32_F32(s0, v1);
                     } else {

@@ -23,12 +23,24 @@ void arm_fsave(x86emu_t* emu, uint8_t* ed);
 void arm_frstor(x86emu_t* emu, uint8_t* ed);
 void arm_fprem1(x86emu_t* emu);
 
+void arm_aesd(x86emu_t* emu, int xmm);
+void arm_aese(x86emu_t* emu, int xmm);
+void arm_aesdlast(x86emu_t* emu, int xmm);
+void arm_aeselast(x86emu_t* emu, int xmm);
+void arm_aesimc(x86emu_t* emu, int xmm);
+void arm_aeskeygenassist(x86emu_t* emu, int gx, void* p, uint32_t u8);
+void arm_pclmul(x86emu_t* emu, int gx, void* p, uint32_t u8);
+
+void arm_clflush(x86emu_t* emu, void* p);
+
 int64_t arm_fist64_0(double d);
 int64_t arm_fist64_1(double d);
 int64_t arm_fist64_2(double d);
 int64_t arm_fist64_3(double d);
 
 void arm_ud(x86emu_t* emu);
+void arm_priv(x86emu_t* emu);
+void arm_singlestep(x86emu_t* emu);
 
 #define FPUFIRST    8
 
@@ -71,9 +83,6 @@ int CacheNeedsTransform(dynarec_arm_t* dyn, int i1);
 // Undo the changes of a neoncache to get the status before the instruction
 void neoncacheUnwind(neoncache_t* cache);
 
-// is inst clean for a son branch?
-int isInstClean(dynarec_arm_t* dyn, int ninst);
-
 // predecessor access
 int isPred(dynarec_arm_t* dyn, int ninst, int pred);
 int getNominalPred(dynarec_arm_t* dyn, int ninst);
@@ -82,10 +91,14 @@ int getNominalPred(dynarec_arm_t* dyn, int ninst);
 int getedparity(dynarec_arm_t* dyn, int ninst, uintptr_t addr, uint8_t nextop, int parity);
 // Do the GETED, but don't emit anything...
 uintptr_t fakeed(dynarec_arm_t* dyn, uintptr_t addr, int ninst, uint8_t nextop);
+uint8_t geted_ib(dynarec_arm_t* dyn, uintptr_t addr, int ninst, uint8_t nextop);
 
 // Is what pointed at addr a native call? And if yes, to what function?
 int isNativeCall(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t* calladdress, int* retn);
 
 const char* getCacheName(int t, int n);
+
+void inst_name_pass3(dynarec_arm_t* dyn, int ninst, const char* name);
+void print_opcode(dynarec_arm_t* dyn, int ninst, uint32_t opcode);
 
 #endif //__DYNAREC_ARM_FUNCTIONS_H__

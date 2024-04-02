@@ -27,6 +27,10 @@
 #include "dynarec_arm_functions.h"
 #include "dynarec_arm_helper.h"
 
+int isRetX87Wrapper(wrapper_t fun);
+void emit_signal(x86emu_t* emu, int sig, void* addr, int code);
+void emit_div0(x86emu_t* emu, void* addr, int code);
+
 uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst, int* ok, int* need_epilog)
 {
     uint8_t nextop, opcode;
@@ -661,7 +665,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             i32 = F32S;
             if(PK(0)==0xC3) {
                 MESSAGE(LOG_DUMP, "PUSH then RET, using indirect\n");
-                MOV32(x3, ip+1);
+                MOV32(x3, addr-4);
                 LDR_IMM9(x1, x3, 0);
                 PUSH1(x1);
             } else {
@@ -1000,7 +1004,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("(LOCK)XCHG Eb, Gb");
             // Do the swap
             nextop = F8;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 GETGB(x14);
                 ed = (nextop&7);
                 eb1 = xEAX+(ed&3);
@@ -1027,7 +1031,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0x87:
             INST_NAME("(LOCK)XCHG Ed, Gd");
             nextop = F8;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 GETGD;
                 GETED;
                 if(gd!=ed) {
@@ -1077,7 +1081,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             } else {
                 gd = gb1;   // no need to extract
             }
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 ed = (nextop&7);
                 eb1 = xEAX+(ed&3);  // Ax, Cx, Dx or Bx
                 eb2 = ((ed&4)>>2);    // L or H
@@ -1092,7 +1096,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV Ed, Gd");
             nextop=F8;
             GETGD;
-            if((nextop&0xC0)==0xC0) {   // reg <= reg
+            if(MODREG) {   // reg <= reg
                 MOV_REG(xEAX+(nextop&7), gd);
             } else {                    // mem <= reg
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 4095, 0, 0, &lock);
@@ -1106,7 +1110,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             gd = (nextop&0x38)>>3;
             gb1 = xEAX+(gd&3);
             gb2 = ((gd&4)>>2);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                     wback = (nextop&7);
                     wb2 = (wback>>2);
                     wback = xEAX+(wback&3);
@@ -1117,10 +1121,6 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         ed = wback;
                     }
                 } else {
-                    if(box86_dynarec_strongmem && 
-                     (dyn->insts[ninst].x86.barrier || !ninst || (box86_dynarec_strongmem>1) || (ninst && dyn->insts[ninst-1].x86.barrier))) {
-                        SMDMB();
-                    }
                     addr = geted(dyn, addr, ninst, nextop, &wback, x3, &fixedaddress, 4095, 0, 0, &lock);
                     SMREADLOCK(lock);
                     LDRB_IMM9(x14, wback, fixedaddress);
@@ -1132,7 +1132,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV Gd, Ed");
             nextop=F8;
             GETGD;
-            if((nextop&0xC0)==0xC0) {   // reg <= reg
+            if(MODREG) {   // reg <= reg
                 MOV_REG(gd, xEAX+(nextop&7));
             } else {                    // mem <= reg
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 4095, 0, 0, &lock);
@@ -1144,7 +1144,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV Ed, Seg");
             nextop=F8;
             MOV32(x3, offsetof(x86emu_t, segs[(nextop&0x38)>>3]));
-            if((nextop&0xC0)==0xC0) {   // reg <= seg
+            if(MODREG) {   // reg <= seg
                 LDRH_REG(xEAX+(nextop&7), xEmu, x3);
             } else {                    // mem <= seg
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 0, 0, 0, NULL);
@@ -1157,7 +1157,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("LEA Gd, Ed");
             nextop=F8;
             GETGD;
-            if((nextop&0xC0)==0xC0) {   // reg <= reg? that's an invalid operation
+            if(MODREG) {   // reg <= reg? that's an invalid operation
                 DEFAULT;
             } else {                    // mem <= reg
                 addr = geted(dyn, addr, ninst, nextop, &ed, gd, &fixedaddress, 0, 0, 0, NULL);
@@ -1169,7 +1169,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0x8E:
             INST_NAME("MOV Seg,Ew");
             nextop = F8;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 ed = xEAX+(nextop&7);
             } else {
                 addr = geted(dyn, addr, ninst, nextop, &ed, x2, &fixedaddress, 255, 0, 0, NULL);
@@ -1189,7 +1189,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0x8F:
             INST_NAME("POP Ed");
             nextop = F8;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 POP1(xEAX+(nextop&7));
             } else {
                 POP1(x2); // so this can handle POP [ESP] and maybe some variant too
@@ -1245,6 +1245,12 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             AND_REG_LSL_IMM5(xFlags, xFlags, x1, 0);
             ORR_IMM8(xFlags, xFlags, 2, 0);
             SET_DFNONE(x1);
+            if(box86_wine || 1) {    // should this be done all the time?
+                TSTS_IMM8_ROR(xFlags, 0x1, 12); // 0x100 == F_TF
+                B_NEXT(cEQ);
+                // go to epilog, TF should trigger at end of next opcode, so using Interpretor only
+                jump_to_epilog(dyn, addr, 0, ninst);
+            }
             break;
         case 0x9E:
             INST_NAME("SAHF");
@@ -1264,6 +1270,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV AL, Ob");
             u32 = F32;
             MOV32(x2, u32);
+            if(isLockAddress(u32)) lock=1; else lock = 0;
+            SMREADLOCK(lock);
             LDRB_IMM9(x2, x2, 0);
             BFI(xEAX, x2, 0, 8);
             break;
@@ -1271,33 +1279,41 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("MOV EAX, Od");
             u32 = F32;
             MOV32(x2, u32);
+            if(isLockAddress(u32)) lock=1; else lock = 0;
+            SMREADLOCK(lock);            
             LDR_IMM9(xEAX, x2, 0);
             break;
         case 0xA2:
             INST_NAME("MOV Ob, AL");
             u32 = F32;
             MOV32(x2, u32);
+            if(isLockAddress(u32)) lock=1; else lock = 0;
             STRB_IMM9(xEAX, x2, 0);
-            SMWRITE();
+            SMWRITELOCK(lock);
             break;
         case 0xA3:
             INST_NAME("MOV Od, EAX");
             u32 = F32;
             MOV32(x2, u32);
+            if(isLockAddress(u32)) lock=1; else lock = 0;
             STR_IMM9(xEAX, x2, 0);
-            SMWRITE();
+            SMWRITELOCK(lock);
             break;
         case 0xA4:
             INST_NAME("MOVSB");
             GETDIR(x3, 1);
+            SMREAD();
             LDRBAI_REG_LSL_IMM5(x1, xESI, x3, 0);
             STRBAI_REG_LSL_IMM5(x1, xEDI, x3, 0);
+            SMWRITE();
             break;
         case 0xA5:
             INST_NAME("MOVSD");
             GETDIR(x3, 4);
+            SMREAD();
             LDRAI_REG_LSL_IMM5(x1, xESI, x3, 0);
             STRAI_REG_LSL_IMM5(x1, xEDI, x3, 0);
+            SMWRITE();
             break;
         case 0xA6:
             INST_NAME("CMPSB");
@@ -1334,11 +1350,13 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             INST_NAME("STOSB");
             GETDIR(x3, 1);
             STRBAI_REG_LSL_IMM5(xEAX, xEDI, x3, 0);
+            SMWRITE();
             break;
         case 0xAB:
             INST_NAME("STOSD");
             GETDIR(x3, 4);
             STRAI_REG_LSL_IMM5(xEAX, xEDI, x3, 0);
+            SMWRITE();
             break;
         case 0xAC:
             INST_NAME("LODSB");
@@ -1444,49 +1462,42 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 case 4:
                 case 6:
                     INST_NAME("SHL Eb, Ib");
-                    SETFLAGS(X_ALL, SF_PENDING);
-                    GETEB(x1);
-                    u8 = (F8)&0x1f;
-                    UFLAG_IF{
-                        MOV32(x14, u8); UFLAG_OP2(x14)
-                    };
-                    UFLAG_OP1(ed);
-                    MOV_REG_LSL_IMM5(ed, ed, u8);
-                    EBBACK;
-                    UFLAG_RES(ed);
-                    UFLAG_DF(x3, d_shl8);
+                    if(geted_ib(dyn, addr, ninst, nextop)&0x1f) {
+                        SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
+                        GETEB(x1);
+                        u8 = (F8)&0x1f;
+                        emit_shl8c(dyn, ninst, ed, u8, x2, x14);
+                        EBBACK;
+                    } else {
+                        FAKEED;
+                        F8;
+                    }
                     break;
                 case 5:
                     INST_NAME("SHR Eb, Ib");
-                    SETFLAGS(X_ALL, SF_PENDING);
-                    GETEB(x1);
-                    u8 = (F8)&0x1f;
-                    UFLAG_IF{
-                        MOV32(x14, u8); UFLAG_OP2(x14)
-                    };
-                    UFLAG_OP1(ed);
-                    if(u8) {
-                        MOV_REG_LSR_IMM5(ed, ed, u8);
+                    if(geted_ib(dyn, addr, ninst, nextop)&0x1f) {
+                        SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
+                        GETEB(x1);
+                        u8 = (F8)&0x1f;
+                        emit_shr8c(dyn, ninst, ed, u8, x2, x14);
                         EBBACK;
+                    } else {
+                        FAKEED;
+                        F8;
                     }
-                    UFLAG_RES(ed);
-                    UFLAG_DF(x3, d_shr8);
                     break;
                 case 7:
                     INST_NAME("SAR Eb, Ib");
-                    SETFLAGS(X_ALL, SF_PENDING);
-                    GETSEB(x1);
-                    u8 = (F8)&0x1f;
-                    UFLAG_IF{
-                        MOV32(x14, u8); UFLAG_OP2(x14)
-                    };
-                    UFLAG_OP1(ed);
-                    if(u8) {
-                        MOV_REG_ASR_IMM5(ed, ed, u8);
+                    if(geted_ib(dyn, addr, ninst, nextop)&0x1f) {
+                        SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
+                        GETSEB(x1);
+                        u8 = (F8)&0x1f;
+                        emit_sar8c(dyn, ninst, ed, u8, x2, x14);
                         EBBACK;
+                    } else {
+                        FAKEED;
+                        F8;
                     }
-                    UFLAG_RES(ed);
-                    UFLAG_DF(x3, d_sar8);
                     break;
             }
             break;
@@ -1518,7 +1529,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     u8 = F8;
                     MOVW(x2, u8);
                     CALL_(rcl32, ed, (1<<x14));
-                    WBACK;  // no SBACK here because ret value is ed directly
+                    WBACK;
                     break;
                 case 3:
                     INST_NAME("RCR Ed, Ib");
@@ -1549,13 +1560,13 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                             BFC_COND(cCC, xFlags, F_CF, 1);
 
                         }
-                        WBACK;  // no SBACK here because ed has been used all along and not x1
+                        WBACK;
                     } else if(u8>1) {
                         MESSAGE(LOG_DUMP, "Need Optimization RCR\n");
                         SETFLAGS(X_OF|X_CF, SF_SET);
                         MOVW(x2, u8);
                         CALL_(rcr32, ed, (1<<x14));
-                        WBACK;  // no SBACK here because ret value is ed directly
+                        WBACK;
                     }
                     break;
                 case 4:
@@ -1617,7 +1628,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0xC6:
             INST_NAME("MOV Eb, Ib");
             nextop=F8;
-            if((nextop&0xC0)==0xC0) {   // reg <= u8
+            if(MODREG) {   // reg <= u8
                 u8 = F8;
                 ed = (nextop&7);
                 eb1 = xEAX+(ed&3);  // Ax, Cx, Dx or Bx
@@ -1635,7 +1646,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
         case 0xC7:
             INST_NAME("MOV Ed, Id");
             nextop=F8;
-            if((nextop&0xC0)==0xC0) {   // reg <= i32
+            if(MODREG) {   // reg <= i32
                 i32 = F32S;
                 ed = xEAX+(nextop&7);
                 MOV32(ed, i32);
@@ -1663,8 +1674,10 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 if((PK(0)==0) && (PK(1)==0) && (PK(2)==0) && (PK(3)==0))
                 {
                     addr+=4;
+                    SKIPTEST(x14);
                     MESSAGE(LOG_DEBUG, "Exit x86 Emu\n");
                     MOV32(x14, ip+1+2);
+                    SMEND();
                     STM(xEmu, (1<<xEAX)|(1<<xEBX)|(1<<xECX)|(1<<xEDX)|(1<<xESI)|(1<<xEDI)|(1<<xESP)|(1<<xEBP)|(1<<xEIP)|(1<<xFlags));
                     MOVW(x1, 1);
                     STR_IMM9(x1, xEmu, offsetof(x86emu_t, quit));
@@ -1672,6 +1685,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     *need_epilog = 1;
                 } else {
                     MESSAGE(LOG_DUMP, "Native Call to %s\n", GetNativeName(GetNativeFnc(ip)));
+                    SKIPTEST(x14);
+                    SMEND();
                     x87_forget(dyn, ninst, x3, x14, 0);
                     if((box86_log<2) && !cycle_log) {   // call the wrapper directly
                         uintptr_t ncall[2]; // to avoid BUSERROR!!!
@@ -1707,18 +1722,24 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 MOV32(x2, offsetof(box86context_t, signals[SIGTRAP]));
                 LDR_REG_LSL_IMM5(x3, x1, x2, 0);
                 CMPS_IMM8(x3, 0);
-                B_NEXT(cNE);
+                B_NEXT(cEQ);
+                STM(xEmu, (1<<xEAX)|(1<<xEBX)|(1<<xECX)|(1<<xEDX)|(1<<xESI)|(1<<xEDI)|(1<<xESP)|(1<<xEBP)|(1<<xEIP)|(1<<xFlags));
+                MOV32(xEIP, addr);
+                STR_IMM9(xEIP, xEmu, offsetof(x86emu_t, ip));
                 MOV32(x1, SIGTRAP);
-                CALL_(raise, -1, 0);
+                MOV32(x2, addr);
+                MOV32(x3, 128);
+                CALL(emit_signal, -1, 0);
                 break;
             }
             break;
         case 0xCD:
             SETFLAGS(X_ALL, SF_SET);    // Hack, set all flags (to an unknown state...)
+            SKIPTEST(x14);
             SMEND();
-            if(PK(0)==0x80) {
+            u8 = F8;
+            if(u8==0x80) {
                 INST_NAME("Syscall");
-                u8 = F8;
                 BARRIER(BARRIER_FLOAT);
                 MOV32(xEIP, ip+2);
                 STM(xEmu, (1<<xEAX)|(1<<xEBX)|(1<<xECX)|(1<<xEDX)|(1<<xESI)|(1<<xEDI)|(1<<xESP)|(1<<xEBP)|(1<<xEIP)|(1<<xFlags));
@@ -1734,7 +1755,11 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 jump_to_epilog(dyn, 0, xEIP, ninst);
             } else {
                 INST_NAME("INT Ib");
-                DEFAULT;
+                if(box86_wine && u8==0x2D && 0) {
+                    MESSAGE(LOG_DEBUG, "Hack for wine/int 2d\n");
+                } else {
+                    DEFAULT;
+                }
             }
             break;
 
@@ -1747,115 +1772,68 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             *ok = 0;
             break;
         case 0xD0:
-        case 0xD2:
             nextop = F8;
             switch((nextop>>3)&7) {
                 case 0:
-                    if(opcode==0xD0) {
-                        INST_NAME("ROL Eb, 1");
-                        SETFLAGS(X_OF|X_CF, SF_SUBSET_PENDING);
-                        GETEB(x1);
-                        emit_rol8c(dyn, ninst, ed, 1, x2, x14);
-                        EBBACK;
-                    } else {
-                        INST_NAME("ROL Eb, CL");
-                        AND_IMM8(x2, xECX, 0x1f);
-                        MESSAGE(LOG_DUMP, "Need Optimization ROL 8b\n");
-                        SETFLAGS(X_OF|X_CF, SF_SET);
-                        GETEB(x1);
-                        CALL_(rol8, x1, (1<<x3));
-                        EBBACK;
-                    }
+                    INST_NAME("ROL Eb, 1");
+                    SETFLAGS(X_OF|X_CF, SF_SUBSET_PENDING);
+                    GETEB(x1);
+                    emit_rol8c(dyn, ninst, ed, 1, x2, x14);
+                    EBBACK;
                     break;
                 case 1:
-                    if(opcode==0xD0) {
-                        INST_NAME("ROR Eb, 1");
-                        MOVW(x2, 1);
-                        SETFLAGS(X_OF|X_CF, SF_SUBSET_PENDING);
-                        GETEB(x1);
-                        emit_ror8c(dyn, ninst, ed, 1, x2, x14);
-                        EBBACK;
-                    } else {
-                        INST_NAME("ROR Eb, CL");
-                        AND_IMM8(x2, xECX, 0x1f);
-                        SETFLAGS(X_OF|X_CF, SF_SET);
-                        MESSAGE(LOG_DUMP, "Need Optimization ROR 8b\n");
-                        GETEB(x1);
-                        CALL_(ror8, x1, (1<<x3));
-                        EBBACK;
-                    }
+                    INST_NAME("ROR Eb, 1");
+                    MOVW(x2, 1);
+                    SETFLAGS(X_OF|X_CF, SF_SUBSET_PENDING);
+                    GETEB(x1);
+                    emit_ror8c(dyn, ninst, ed, 1, x2, x14);
+                    EBBACK;
                     break;
                 case 2:
-                    if(opcode==0xD0) {INST_NAME("RCL Eb, 1");} else {INST_NAME("RCL Eb, CL");}
+                    INST_NAME("RCL Eb, 1");
                     MESSAGE(LOG_DUMP, "Need Optimization RCL 8b\n");
                     READFLAGS(X_CF);
                     SETFLAGS(X_OF|X_CF, SF_SET);
-                    if(opcode==0xD0) {MOVW(x2, 1);} else {AND_IMM8(x2, xECX, 0x1f);}
+                    MOVW(x2, 1);
                     GETEB(x1);
                     CALL_(rcl8, x1, (1<<x3));
                     EBBACK;
                     break;
                 case 3:
-                    if(opcode==0xD0) {INST_NAME("RCR Eb, 1");} else {INST_NAME("RCR Eb, CL");}
+                    INST_NAME("RCR Eb, 1");
                     MESSAGE(LOG_DUMP, "Need Optimization RCR 8b\n");
                     READFLAGS(X_CF);
                     SETFLAGS(X_OF|X_CF, SF_SET);
-                    if(opcode==0xD0) {MOVW(x2, 1);} else {AND_IMM8(x2, xECX, 0x1f);}
+                    MOVW(x2, 1);
                     GETEB(x1);
                     CALL_(rcr8, x1, (1<<x3));
                     EBBACK;
                     break;
                 case 4:
                 case 6:
-                    if(opcode==0xD0) {
-                        INST_NAME("SHL Eb, 1");
-                        MOVW(x2, 1);
-                    } else {
-                        INST_NAME("SHL Eb, CL");
-                        AND_IMM8(x2, xECX, 0x1f);
-                    }
-                    SETFLAGS(X_ALL, SF_PENDING);
+                    INST_NAME("SHL Eb, 1");
+                    SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
                     GETEB(x1);
-                    UFLAG_OP12(ed, x2)
-                    MOV_REG_LSL_REG(ed, ed, x2);
+                    emit_shl8c(dyn, ninst, ed, 1, x2, x14);
                     EBBACK;
-                    UFLAG_RES(ed);
-                    UFLAG_DF(x3, d_shl8);
                     break;
                 case 5:
-                    if(opcode==0xD0) {
-                        INST_NAME("SHR Eb, 1");
-                        MOVW(x2, 1);
-                    } else {
-                        INST_NAME("SHR Eb, CL");
-                        AND_IMM8(x2, xECX, 0x1f);
-                    }
-                    SETFLAGS(X_ALL, SF_PENDING);
+                    INST_NAME("SHR Eb, 1");
+                    SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
                     GETEB(x1);
-                    UFLAG_OP12(ed, x2)
-                    MOV_REG_LSR_REG(ed, ed, x2);
+                    emit_shr8c(dyn, ninst, ed, 1, x2, x14);
                     EBBACK;
-                    UFLAG_RES(ed);
-                    UFLAG_DF(x3, d_shr8);
                     break;
                 case 7:
-                    if(opcode==0xD0) {
-                        INST_NAME("SAR Eb, 1");
-                        MOVW(x2, 1);
-                    } else {
-                        INST_NAME("SAR Eb, CL");
-                        AND_IMM8(x2, xECX, 0x1f);
-                    }
-                    SETFLAGS(X_ALL, SF_PENDING);
+                    INST_NAME("SAR Eb, 1");
+                    SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
                     GETSEB(x1);
-                    UFLAG_OP12(ed, x2)
-                    MOV_REG_ASR_REG(ed, ed, x2);
+                    emit_sar8c(dyn, ninst, ed, 1, x2, x14);
                     EBBACK;
-                    UFLAG_RES(ed);
-                    UFLAG_DF(x3, d_sar8);
                     break;
             }
             break;
+
         case 0xD1:
             nextop = F8;
             switch((nextop>>3)&7) {
@@ -1881,7 +1859,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     MOVW(x2, 1);
                     GETEDW(x14, x1);
                     CALL_(rcl32, ed, (1<<x14));
-                    WBACK;  // no SBACK here because ret value is ed directly
+                    WBACK;
                     break;
                 case 3:
                     INST_NAME("RCR Ed, 1");
@@ -1933,6 +1911,125 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     GETED;
                     emit_sar32c(dyn, ninst, ed, 1, x3, x14);
                     WBACK;
+                    break;
+            }
+            break;
+        case 0xD2:
+            nextop = F8;
+            switch((nextop>>3)&7) {
+                case 0:
+                    INST_NAME("ROL Eb, CL");
+                    SETFLAGS(X_OF|X_CF, SF_SUBSET);
+                    if(box86_dynarec_safeflags>1)
+                        MAYSETFLAGS();
+                    UFLAG_IF {
+                        TSTS_IMM8(xECX, 0x1f);
+                        B_NEXT(cEQ);
+                    }
+                    AND_IMM8(x2, xECX, 0x7);
+                    RSB_IMM8(x2, x2, 8);
+                    GETEB(x1);
+                    BFI(ed, ed, 8, 8);
+                    MOV_REG_LSR_REG(ed, ed, x2);
+                    EBBACK;
+                    UFLAG_IF {  // calculate flags directly
+                        CMPS_IMM8(x2, 7);
+                            MOV_REG_LSR_IMM5_COND(cEQ, x3, ed, 7);
+                            ADD_REG_LSL_IMM5_COND(cEQ, x3, x3, ed, 0);
+                            BFI_COND(cEQ, xFlags, x3, F_OF, 1);
+                        BFI(xFlags, ed, F_CF, 1);
+                        UFLAG_DF(x2, d_none);
+                    }
+                    break;
+                case 1:
+                    INST_NAME("ROR Eb, CL");
+                    SETFLAGS(X_OF|X_CF, SF_SUBSET);
+                    if(box86_dynarec_safeflags>1)
+                        MAYSETFLAGS();
+                    UFLAG_IF {
+                        TSTS_IMM8(xECX, 0x1f);
+                        B_NEXT(cEQ);
+                    }
+                    AND_IMM8(x2, xECX, 0x7);
+                    GETEB(x1);
+                    BFI(ed, ed, 8, 8);
+                    MOV_REG_LSR_REG(ed, ed, x2);
+                    EBBACK;
+                    UFLAG_IF {  // calculate flags directly
+                        CMPS_IMM8(x2, 1);
+                            MOV_REG_LSR_IMM5_COND(cEQ, x2, ed, 6); // x2 = d>>30
+                            XOR_REG_LSR_IMM8_COND(cEQ, x2, x2, x2, 1); // x2 = ((d>>30) ^ ((d>>30)>>1))
+                            BFI_COND(cEQ, xFlags, x2, F_OF, 1);
+                        MOV_REG_LSR_IMM5(x2, ed, 7);
+                        BFI(xFlags, x2, F_CF, 1);
+                        UFLAG_DF(x2, d_none);
+                    }
+                    break;
+                case 2:
+                    INST_NAME("RCL Eb, CL");
+                    MESSAGE(LOG_DUMP, "Need Optimization RCL 8b\n");
+                    READFLAGS(X_CF);
+                    SETFLAGS(X_OF|X_CF, SF_SET);
+                    AND_IMM8(x2, xECX, 0x1f);
+                    GETEB(x1);
+                    CALL_(rcl8, x1, (1<<x3));
+                    EBBACK;
+                    break;
+                case 3:
+                    INST_NAME("RCR Eb, CL");
+                    MESSAGE(LOG_DUMP, "Need Optimization RCR 8b\n");
+                    READFLAGS(X_CF);
+                    SETFLAGS(X_OF|X_CF, SF_SET);
+                    AND_IMM8(x2, xECX, 0x1f);
+                    GETEB(x1);
+                    CALL_(rcr8, x1, (1<<x3));
+                    EBBACK;
+                    break;
+                case 4:
+                case 6:
+                    INST_NAME("SHL Eb, CL");
+                    SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
+                    if(box86_dynarec_safeflags>1)
+                        MAYSETFLAGS();
+                    UFLAG_IF {
+                        ANDS_IMM8(x2, xECX, 0x1f);
+                        B_NEXT(cEQ);
+                    } else {
+                        AND_IMM8(x2, xECX, 0x1f);
+                    }
+                    GETEB(x1);
+                    emit_shl8(dyn, ninst, ed, x2, x2, x14);
+                    EBBACK;
+                    break;
+                case 5:
+                    INST_NAME("SHR Eb, CL");
+                    SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
+                    if(box86_dynarec_safeflags>1)
+                        MAYSETFLAGS();
+                    UFLAG_IF {
+                        ANDS_IMM8(x2, xECX, 0x1f);
+                        B_NEXT(cEQ);
+                    } else {
+                        AND_IMM8(x2, xECX, 0x1f);
+                    }
+                    GETEB(x1);
+                    emit_shr8(dyn, ninst, ed, x2, x2, x14);
+                    EBBACK;
+                    break;
+                case 7:
+                    INST_NAME("SAR Eb, CL");
+                    SETFLAGS(X_ALL, SF_SET_PENDING);    // some flags are left undefined
+                    if(box86_dynarec_safeflags>1)
+                        MAYSETFLAGS();
+                    UFLAG_IF {
+                        ANDS_IMM8(x2, xECX, 0x1f);
+                        B_NEXT(cEQ);
+                    } else {
+                        AND_IMM8(x2, xECX, 0x1f);
+                    }
+                    GETSEB(x1);
+                    emit_sar8(dyn, ninst, ed, x2, x2, x14);
+                    EBBACK;
                     break;
             }
             break;
@@ -1991,7 +2088,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     AND_IMM8(x2, xECX, 0x1f);
                     GETEDW(x14, x1);
                     CALL_(rcl32, ed, (1<<x14));
-                    WBACK;  // no SBACK here because ret value is ed directly
+                    WBACK;
                     break;
                 case 3:
                     INST_NAME("RCR Ed, CL");
@@ -2001,7 +2098,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     AND_IMM8(x2, xECX, 0x1f);
                     GETEDW(x14, x1);
                     CALL_(rcr32, ed, (1<<x14));
-                    WBACK;  // no SBACK here because ret value is ed directly
+                    WBACK;
                     break;
                 case 4:
                 case 6:
@@ -2158,8 +2255,8 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 tmp = dyn->insts[ninst].pass2choice = 1;
             else if ((getProtection(u32)&PROT_READ) && (PKa(u32+0)==0x8B) && (((PKa(u32+1))&0xC7)==0x04) && (PKa(u32+2)==0x24) && (PKa(u32+3)==0xC3))
                 tmp = dyn->insts[ninst].pass2choice = 2;
-            /*else if(isNativeCall(dyn, u32, &dyn->insts[ninst].natcall, &dyn->insts[ninst].retn))
-                tmp = dyn->insts[ninst].pass2choice = 3;*/
+            else if(isNativeCall(dyn, u32, &dyn->insts[ninst].natcall, &dyn->insts[ninst].retn))
+                tmp = dyn->insts[ninst].pass2choice = 3;
             else 
                 tmp = dyn->insts[ninst].pass2choice = 0;
             #else
@@ -2169,26 +2266,31 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 case 1:
                     //SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
                     MESSAGE(LOG_DUMP, "Hack for Call 0\n");
+                    SKIPTEST(x14);
                     MOV32(xEIP, addr);
                     PUSH1(xEIP);
                     break;
                 case 2:
                     //SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
                     MESSAGE(LOG_DUMP, "Hack for Call x86.get_pc_thunk.reg\n");
+                    SKIPTEST(x14);
                     u8 = PK(i32+1);
                     gd = xEAX+((u8&0x38)>>3);
                     MOV32(gd, addr);
                     break;
-                // disabling this to avoid fetching data outside current block (in case this part changed, this block will not been marck as dirty)
-                /*case 3:
+                case 3:
                     SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
                     BARRIER(BARRIER_FULL);
                     BARRIER_NEXT(BARRIER_FULL);
                     MOV32(x2, addr);
                     PUSH1(x2);
                     MESSAGE(LOG_DUMP, "Native Call to %s (retn=%d)\n", GetNativeName(GetNativeFnc(dyn->insts[ninst].natcall-1)), dyn->insts[ninst].retn);
+                    SKIPTEST(x14);
                     // calling a native function
-                    x87_forget(dyn, ninst, x3, x14, 0);
+                    if(isRetX87Wrapper(*(wrapper_t*)(dyn->insts[ninst].natcall+2))) {
+                        // return value will be on the stack, so the stack depth needs to be updated
+                        x87_purgecache(dyn, ninst, 0, x3, x14, x1);
+                    }
                     if((box86_log<2) && !cycle_log && dyn->insts[ninst].natcall) {   // call the wrapper directly
                         uintptr_t ncall[2];
                         memcpy(ncall,  (void*)(dyn->insts[ninst].natcall+2), 2*sizeof(void*));   // the wrapper + function
@@ -2219,20 +2321,43 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     B_NEXT(cNE);    // not quitting, so lets continue
                     MARK;
                     jump_to_epilog(dyn, 0, xEIP, ninst);
-                    break;*/
+                    break;
                 default:
                     if((box86_dynarec_safeflags>1) || (ninst && dyn->insts[ninst-1].x86.set_flags)) {
                         READFLAGS(X_PEND);  // that's suspicious
                     } else {
-                        //SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
+                        SETFLAGS(X_ALL, SF_SET);    // Hack to set flags to "dont'care" state
                     }
                     // regular call
-                    BARRIER(BARRIER_FLOAT);
-                    //BARRIER_NEXT(BARRIER_FULL);
-                    *need_epilog = 0;
-                    *ok = 0;
+                    if(box86_dynarec_callret && box86_dynarec_bigblock>1) {
+                        BARRIER(BARRIER_FULL);
+                        BARRIER_NEXT(BARRIER_FULL);
+                    } else {
+                        BARRIER(BARRIER_FLOAT);
+                        *need_epilog = 0;
+                        *ok = 0;
+                    }
                     MOV32(x2, addr);
                     PUSH1(x2);
+                    if(box86_dynarec_callret) {
+                        SET_HASCALLRET();
+                        // Push actual return address
+                        if(addr < (dyn->start+dyn->isize)) {
+                            // there is a next...
+                            j32 = (dyn->insts)?(dyn->insts[ninst].epilog-(dyn->arm_size)):0;
+                            MESSAGE(LOG_NONE, "\tCALLRET set return to +%di\n", j32>>2);
+                            ADR(c__, x14, j32);
+                        } else {
+                            MESSAGE(LOG_NONE, "\tCALLRET set return to Jmptable(%p)\n", (void*)addr);
+                            j32 = getJumpTableAddress(addr);
+                            MOV32(x14, j32);
+                            LDR_IMM9(x14, x14, 0);
+                        }
+                        STMDB(xSP, (1<<x2)|(1<<x14));
+                    } else {
+                        *need_epilog = 0;
+                        *ok = 0;
+                    }
                     if(u32==0) {   // self modifying code maybe? so use indirect address fetching
                         MOV32(x14, addr-4);
                         LDR_IMM9(x14, x14, 0);
@@ -2252,11 +2377,11 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 INST_NAME("JMP Ib");
                 i32 = F8S;
             }
-            JUMP(addr+i32, 0);
+            JUMP((uintptr_t)getAlternate((void*)(addr+i32)), 0);
             if(dyn->insts[ninst].x86.jmp_insts==-1) {
                 // out of the block
                 fpu_purgecache(dyn, ninst, 1, x1, x2, x3);
-                jump_to_next(dyn, addr+i32, 0, ninst);
+                jump_to_next(dyn, (uintptr_t)getAlternate((void*)(addr+i32)), 0, ninst);
             } else {
                 // inside the block
                 CacheTransform(dyn, ninst, CHECK_CACHE(), x1, x2, x3);
@@ -2271,9 +2396,20 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             *ok = 0;
             break;
         
-        case 0xEE:
-            INST_NAME("OUT dx, al");
-            //ignored!
+        case 0xEC:                      /* IN AL, DX */
+        case 0xED:                      /* IN EAX, DX */
+        case 0xEE:                      /* OUT DX, AL */
+        case 0xEF:                      /* OUT DX, EAX */
+            INST_NAME(opcode==0xEC?"IN AL, DX":(opcode==0xED?"IN EAX, DX":(opcode==0xEE?"OUT DX? AL":"OUT DX, EAX")));
+            SETFLAGS(X_ALL, SF_SET);    // Hack to set flags in "don't care" state
+            STM(xEmu, (1<<xEAX)|(1<<xECX)|(1<<xEDX)|(1<<xEBX)|(1<<xESP)|(1<<xEBP)|(1<<xESI)|(1<<xEDI)|(1<<xFlags));
+            MOV32(xEIP, ip);
+            STR_IMM9(xEIP, xEmu, offsetof(x86emu_t, ip));
+            CALL(arm_priv, -1, 0);
+            LDR_IMM9(xEIP, xEmu, offsetof(x86emu_t, ip));
+            jump_to_epilog(dyn, 0, xEIP, ninst);
+            *need_epilog = 0;
+            *ok = 0;
             break;
 
         case 0xF0:
@@ -2297,11 +2433,13 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3, 2);
+                        SMREAD();
                         MARK;
                         LDRHAI_REG_LSL_IMM5(x1, xESI, x3);
                         STRHAI_REG_LSL_IMM5(x1, xEDI, x3);
                         SUBS_IMM8(xECX, xECX, 1);
                         B_MARK(cNE);
+                        SMWRITE();
                         break;
                     case 0xAB:
                         INST_NAME("REP STOSW");
@@ -2312,6 +2450,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         STRHAI_REG_LSL_IMM5(xEAX, xEDI, x3);
                         SUBS_IMM8(xECX, xECX, 1);
                         B_MARK(cNE);
+                        SMWRITE();
                         break;
                     case 0xAF:
                         if(opcode==0xF2) {INST_NAME("REPNZ SCASW");} else {INST_NAME("REPZ SCASW");}
@@ -2390,11 +2529,13 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3,1);
+                        SMREAD();
                         MARK;
                         LDRBAI_REG_LSL_IMM5(x1, xESI, x3, 0);
                         STRBAI_REG_LSL_IMM5(x1, xEDI, x3, 0);
                         SUBS_IMM8(xECX, xECX, 1);
                         B_MARK(cNE);
+                        SMWRITE();
                         // done
                         break;
                     case 0xA5:
@@ -2402,11 +2543,13 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         TSTS_REG_LSL_IMM5(xECX, xECX, 0);
                         B_NEXT(cEQ);    // end of loop
                         GETDIR(x3,4);
+                        SMREAD();
                         MARK;
                         LDRAI_REG_LSL_IMM5(x1, xESI, x3, 0);
                         STRAI_REG_LSL_IMM5(x1, xEDI, x3, 0);
                         SUBS_IMM8(xECX, xECX, 1);
                         B_MARK(cNE);
+                        SMWRITE();
                         // done
                         break;
                     case 0xA6:
@@ -2468,6 +2611,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         STRBAI_REG_LSL_IMM5(xEAX, xEDI, x3, 0);
                         SUBS_IMM8(xECX, xECX, 1);
                         B_MARK(cNE);
+                        SMWRITE();
                         break;
                     case 0xAB:
                         INST_NAME("REP STOSD");
@@ -2478,6 +2622,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                         STRAI_REG_LSL_IMM5(xEAX, xEDI, x3, 0);
                         SUBS_IMM8(xECX, xECX, 1);
                         B_MARK(cNE);
+                        SMWRITE();
                         break;
                     case 0xAC:
                         INST_NAME("REP LODSB");
@@ -2576,7 +2721,7 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 2:
                     INST_NAME("NOT Eb");
-                    if((nextop&0xC0)==0xC0) {
+                    if(MODREG) {
                         wback = (nextop&7);
                         wb2 = (wback>>2);
                         wback = xEAX+(wback&3);
@@ -2597,12 +2742,12 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 case 4:
                     INST_NAME("MUL AL, Ed");
                     SETFLAGS(X_ALL, SF_PENDING);
-                    UFLAG_DF(x2, d_mul8);
                     GETEB(x1);
                     UBFX(x2, xEAX, 0, 8);
                     MUL(x1, x1, x2);
                     BFI(xEAX, x1, 0, 16);
                     UFLAG_RES(x1);
+                    UFLAG_DF(x2, d_mul8);
                     break;
                 case 5:
                     INST_NAME("IMUL AL, Eb");
@@ -2661,52 +2806,66 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                 case 4:
                     INST_NAME("MUL EAX, Ed");
                     SETFLAGS(X_ALL, SF_PENDING);
-                    UFLAG_DF(x2, d_mul32);
                     GETED;
                     UMULL(xEDX, xEAX, xEAX, ed);
                     UFLAG_RES(xEAX);
                     UFLAG_OP1(xEDX);
+                    UFLAG_DF(x2, d_mul32);
                     break;
                 case 5:
                     INST_NAME("IMUL EAX, Ed");
                     SETFLAGS(X_ALL, SF_PENDING);
-                    UFLAG_DF(x2, d_imul32);
                     GETED;
                     SMULL(xEDX, xEAX, xEAX, ed);
                     UFLAG_RES(xEAX);
                     UFLAG_OP1(xEDX);
+                    UFLAG_DF(x2, d_imul32);
                     break;
                 case 6:
                     INST_NAME("DIV Ed");
                     SETFLAGS(X_ALL, SF_SET);
-                    if(arm_div && ninst && dyn->insts 
+                    if(ninst && dyn->insts && (nextop==0xF0)
                        && dyn->insts[ninst-1].x86.addr 
-                       && (*(uint8_t*)(dyn->insts[ninst-1].x86.addr)==0x31 
-                        || *(uint8_t*)(dyn->insts[ninst-1].x86.addr)==0x33)
-                       && *(uint8_t*)(dyn->insts[ninst-1].x86.addr+1)==0xD2) {
-                        // previous instruction is XOR EDX, EDX, so its 32bits / 32bits
-                        SET_DFNONE(x2); // flags are undefined
-                        GETED;
-                        UDIV(x2, xEAX, ed); // x1 = xEAX / ed
-                        MLS(xEDX, x2, ed, xEAX);  // x14 = xEAX mod ed (i.e. xEAX - x1*ed)
-                        MOV_REG(xEAX, x2);
+                       && *(uint8_t*)(dyn->insts[ninst-1].x86.addr)==0xB8 
+                       && *(uint32_t*)(dyn->insts[ninst-1].x86.addr+1)==0) {
+                        // hack for some protection that check a divide by zero actualy trigger a div0 exception
+                        MESSAGE(LOG_INFO, "Divide by 0 hack\n");
+                        STM(xEmu, (1<<xEAX)|(1<<xEBX)|(1<<xECX)|(1<<xEDX)|(1<<xESI)|(1<<xEDI)|(1<<xESP)|(1<<xEBP)|(1<<xEIP)|(1<<xFlags));
+                        MOV32(xEIP, addr);
+                        STR_IMM9(xEIP, xEmu, offsetof(x86emu_t, ip));
+                        MOV_REG(x1, xEIP);
+                        MOV32(x2, 0);
+                        CALL(emit_div0, -1, 0);
                     } else {
-                        GETEDH(x1);
-                        if(arm_div) {
-                            CMPS_IMM8(xEDX, 0);
-                            B_MARK(cEQ);
-                        }
-                        if(ed!=x1) {MOV_REG(x1, ed);}
-                        STM(xEmu, (1<<xEAX) | (1<<xECX) | (1<<xEDX));
-                        CALL(div32, -1, 0);
-                        LDM(xEmu, (1<<xEAX) | (1<<xECX) | (1<<xEDX));
-                        if(arm_div) {
-                            B_NEXT(c__);
-                            MARK;
-                            UDIV(x2, xEAX, ed); // x2 = xEAX / ed
-                            MLS(xEDX, x2, ed, xEAX);  // x14 = xEAX mod ed (i.e. xEAX - x2*ed)
-                            MOV_REG(xEAX, x2);
+                        if(arm_div && ninst && dyn->insts 
+                        && dyn->insts[ninst-1].x86.addr 
+                        && (*(uint8_t*)(dyn->insts[ninst-1].x86.addr)==0x31 
+                            || *(uint8_t*)(dyn->insts[ninst-1].x86.addr)==0x33)
+                        && *(uint8_t*)(dyn->insts[ninst-1].x86.addr+1)==0xD2) {
+                            // previous instruction is XOR EDX, EDX, so its 32bits / 32bits
                             SET_DFNONE(x2); // flags are undefined
+                            GETED;
+                            UDIV(x2, xEAX, ed); // x1 = xEAX / ed
+                            MLS(xEDX, x2, ed, xEAX);  // x14 = xEAX mod ed (i.e. xEAX - x1*ed)
+                            MOV_REG(xEAX, x2);
+                        } else {
+                            GETEDH(x1);
+                            if(arm_div) {
+                                CMPS_IMM8(xEDX, 0);
+                                B_MARK(cEQ);
+                            }
+                            if(ed!=x1) {MOV_REG(x1, ed);}
+                            STM(xEmu, (1<<xEAX) | (1<<xECX) | (1<<xEDX));
+                            CALL(div32, -1, 0);
+                            LDM(xEmu, (1<<xEAX) | (1<<xECX) | (1<<xEDX));
+                            if(arm_div) {
+                                B_NEXT(c__);
+                                MARK;
+                                UDIV(x2, xEAX, ed); // x2 = xEAX / ed
+                                MLS(xEDX, x2, ed, xEAX);  // x14 = xEAX mod ed (i.e. xEAX - x2*ed)
+                                MOV_REG(xEAX, x2);
+                                SET_DFNONE(x2); // flags are undefined
+                            }
                         }
                     }
                     break;
@@ -2764,13 +2923,17 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             ORRS_IMM8(xFlags, xFlags, 1, 0);
             break;
         case 0xFA:
-            INST_NAME("CLI");
-            BFC(xFlags, F_IF, 1);
-            break;
         case 0xFB:
-            INST_NAME("STI");
-            MOVW(x1, 1);
-            BFI(xFlags, x1, F_IF, 1);
+            INST_NAME(opcode==0xFA?"STI":"CLI");
+            SETFLAGS(X_ALL, SF_SET);    // Hack to set flags in "don't care" state
+            STM(xEmu, (1<<xEAX)|(1<<xECX)|(1<<xEDX)|(1<<xEBX)|(1<<xESP)|(1<<xEBP)|(1<<xESI)|(1<<xEDI)|(1<<xFlags));
+            MOV32(xEIP, ip);
+            STR_IMM9(xEIP, xEmu, offsetof(x86emu_t, ip));
+            CALL(arm_priv, -1, 0);
+            LDR_IMM9(xEIP, xEmu, offsetof(x86emu_t, ip));
+            jump_to_epilog(dyn, 0, xEIP, ninst);
+            *need_epilog = 0;
+            *ok = 0;
             break;
         case 0xFC:
             INST_NAME("CLD");
@@ -2823,23 +2986,47 @@ uintptr_t dynarec00(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 2: // CALL Ed
                     INST_NAME("CALL Ed");
-                    PASS2IF((box86_dynarec_safeflags>1) || (ninst && dyn->insts[ninst-1].x86.set_flags), 1) {
+                    PASS2IF((box86_dynarec_safeflags>1) ||
+                        ((ninst && dyn->insts[ninst-1].x86.set_flags)
+                        || ((ninst>1) && dyn->insts[ninst-2].x86.set_flags)), 1)
+                    {
                         READFLAGS(X_PEND);          // that's suspicious
                     } else {
-                        //SETFLAGS(X_ALL, SF_SET);    //Hack to put flag in "don't care" state
+                        SETFLAGS(X_ALL, SF_SET);    //Hack to put flag in "don't care" state
                     }
                     GETEDH(xEIP);
-                    BARRIER(BARRIER_FLOAT);
-                    //BARRIER_NEXT(BARRIER_FULL);
-                    *need_epilog = 0;
-                    *ok = 0;
+                    if(box86_dynarec_callret && box86_dynarec_bigblock>1) {
+                        BARRIER(BARRIER_FULL);
+                        BARRIER_NEXT(BARRIER_FULL);
+                    } else {
+                        BARRIER(BARRIER_FLOAT);
+                        *need_epilog = 0;
+                        *ok = 0;
+                    }
                     MOV32(x2, addr);
+                    if(box86_dynarec_callret) {
+                        SET_HASCALLRET();
+                        // Push actual return address
+                        if(addr < (dyn->start+dyn->isize)) {
+                            // there is a next...
+                            j32 = (dyn->insts)?(dyn->insts[ninst].epilog-(dyn->arm_size)):0;
+                            MESSAGE(LOG_NONE, "\tCALLRET set return to +%di\n", j32>>2);
+                            ADR(c__, x3, j32);
+                        } else {
+                            MESSAGE(LOG_NONE, "\tCALLRET set return to Jmptable(%p)\n", (void*)addr);
+                            j32 = getJumpTableAddress(addr);
+                            MOV32(x3, j32);
+                            LDR_IMM9(x3, x3, 0);
+                        }
+                        STMDB(xSP, (1<<x2)|(1<<x3));
+                    }
                     PUSH1(x2);
                     jump_to_next(dyn, 0, ed, ninst);
                     break;
                 case 4: // JMP Ed
                     INST_NAME("JMP Ed");
-                    BARRIER(BARRIER_FULL);
+                    READFLAGS(X_PEND);
+                    BARRIER(BARRIER_FLOAT);
                     GETEDH(xEIP);
                     jump_to_next(dyn, 0, ed, ninst);
                     *need_epilog = 0;

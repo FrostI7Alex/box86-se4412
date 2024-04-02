@@ -46,6 +46,7 @@ typedef int (*iFppSi_t)(void*, void*, FcValue_t, int);
 
 EXPORT int my_FcPatternAdd(x86emu_t* emu, void* p, void* object, int type, uint32_t t1, uint32_t t2, int append)
 {
+    (void)emu;
     FcValue_t val;
     val.type = type;
     val.u.fake[0] = t1;
@@ -56,6 +57,7 @@ EXPORT int my_FcPatternAdd(x86emu_t* emu, void* p, void* object, int type, uint3
 
 EXPORT int my_FcPatternAddWeak(x86emu_t* emu, void* p, void* object, int type, uint32_t t1, uint32_t t2, int append)
 {
+    (void)emu;
     FcValue_t val;
     val.type = type;
     val.u.fake[0] = t1;
@@ -65,10 +67,12 @@ EXPORT int my_FcPatternAddWeak(x86emu_t* emu, void* p, void* object, int type, u
 }
 
 #define CUSTOM_INIT \
-    getMy(lib);
+    getMy(lib);                     \
+    setNeededLibs(lib, 2,           \
+        "libexpat.so.1",            \
+        "libfreetype.so.6");
 
 #define CUSTOM_FINI \
     freeMy();
 
 #include "wrappedlib_init.h"
-

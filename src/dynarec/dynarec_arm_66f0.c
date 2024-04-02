@@ -41,7 +41,6 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
         case 0x81:
         case 0x83:
             nextop = F8;
-            SMDMB();
             switch((nextop>>3)&7) {
                 case 0: //ADD
                     if(opcode==0x81) {
@@ -50,8 +49,7 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                         INST_NAME("LOCK ADD Ew, Ib");
                     }
                     SETFLAGS(X_ALL, SF_SET_PENDING);
-                    SMDMB();
-                    if((nextop&0xC0)==0xC0) {
+                    if(MODREG) {
                         if(opcode==0x81) i16 = F16S; else i16 = F8S;
                         ed = xEAX+(nextop&7);
                         emit_add16c(dyn, ninst, ed, i16, x3, x14);
@@ -69,9 +67,9 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                             STREXH(x3, x1, wback);
                             CMPS_IMM8(x3, 0);
                             B_MARKLOCK(cNE);
+                            SMDMB();
                         }
                         if(!fixedaddress) {
-                            SMDMB();
                             B_NEXT(c__);
                         }
                         if(!fixedaddress || (fixedaddress && (fixedaddress&1))) {
@@ -84,8 +82,8 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                             CMPS_IMM8(x3, 0);
                             B_MARK(cNE);
                             STRH_IMM8(x1, wback, 0); // put the whole value
+                            SMDMB();
                         }
-                        SMDMB();
                     }
                     break;
                 default:
@@ -101,7 +99,7 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                 case 0: // INC Ew
                     INST_NAME("INC Ew");
                     SETFLAGS(X_ALL&~X_CF, SF_SUBSET_PENDING);
-                    if((nextop&0xC0)==0xC0) {
+                    if(MODREG) {
                         GETEW(x1);
                         emit_inc16(dyn, ninst, ed, x3, x14);
                         EWBACK(x1);
@@ -118,9 +116,9 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                             STREXH(x3, x1, wback);
                             CMPS_IMM8(x3, 0);
                             B_MARKLOCK(cNE);
+                            SMDMB();
                         }
                         if(!fixedaddress) {
-                            SMDMB();
                             B_NEXT(c__);
                         }
                         if(!fixedaddress || (fixedaddress && (fixedaddress&1))) {
@@ -133,13 +131,14 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                             CMPS_IMM8(x3, 0);
                             B_MARK(cNE);
                             STRH_IMM8(x1, wback, 0);
+                            SMDMB();
                         }
                     }
                     break;
                 case 1: //DEC Ew
                     INST_NAME("DEC Ew");
                     SETFLAGS(X_ALL&~X_CF, SF_SUBSET_PENDING);
-                    if((nextop&0xC0)==0xC0) {
+                    if(MODREG) {
                         GETEW(x1);
                         emit_dec32(dyn, ninst, ed, x3, x14);
                         EWBACK(x1);
@@ -156,9 +155,9 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                             STREXH(x3, x1, wback);
                             CMPS_IMM8(x3, 0);
                             B_MARKLOCK(cNE);
+                            SMDMB();
                         }
                         if(!fixedaddress) {
-                            SMDMB();
                             B_NEXT(c__);
                         }
                         if(!fixedaddress || (fixedaddress && (fixedaddress&3))) {
@@ -171,6 +170,7 @@ uintptr_t dynarec66F0(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                             CMPS_IMM8(x3, 0);
                             B_MARK(cNE);
                             STRH_IMM8(x1, wback, 0);
+                            SMDMB();
                         }
                     }
                     break;

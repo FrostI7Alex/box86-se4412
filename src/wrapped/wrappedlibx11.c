@@ -17,7 +17,12 @@
 #include "box86context.h"
 #include "emu/x86emu_private.h"
 
-const char* libx11Name = "libX11.so.6";
+#ifdef ANDROID
+    const char* libx11Name = "libX11.so";
+#else
+    const char* libx11Name = "libX11.so.6";
+#endif
+
 #define LIBNAME libx11
 
 typedef int (*XErrorHandler)(void *, void *);
@@ -111,10 +116,10 @@ GO(15)
 
 // wire_to_event
 #define GO(A)   \
-static uintptr_t my_wire_to_event_fct_##A = 0;                      \
-static int my_wire_to_event_##A(void* dpy, void* re, void* event)   \
-{                                                                   \
-    return (int)RunFunction(my_context, my_wire_to_event_fct_##A, 3, dpy, re, event);\
+static uintptr_t my_wire_to_event_fct_##A = 0;                                              \
+static int my_wire_to_event_##A(void* dpy, void* re, void* event)                           \
+{                                                                                           \
+    return (int)RunFunctionFmt(my_wire_to_event_fct_##A, "ppp", dpy, re, event);\
 }
 SUPER()
 #undef GO
@@ -144,10 +149,10 @@ static void* reverse_wire_to_eventFct(library_t* lib, void* fct)
 
 // event_to_wire
 #define GO(A)   \
-static uintptr_t my_event_to_wire_fct_##A = 0;                      \
-static int my_event_to_wire_##A(void* dpy, void* re, void* event)   \
-{                                                                   \
-    return (int)RunFunction(my_context, my_event_to_wire_fct_##A, 3, dpy, re, event);\
+static uintptr_t my_event_to_wire_fct_##A = 0;                                              \
+static int my_event_to_wire_##A(void* dpy, void* re, void* event)                           \
+{                                                                                           \
+    return (int)RunFunctionFmt(my_event_to_wire_fct_##A, "ppp", dpy, re, event);\
 }
 SUPER()
 #undef GO
@@ -177,10 +182,10 @@ static void* reverse_event_to_wireFct(library_t* lib, void* fct)
 
 // error_handler
 #define GO(A)   \
-static uintptr_t my_error_handler_fct_##A = 0;                      \
-static int my_error_handler_##A(void* dpy, void* error)   \
-{                                                                   \
-    return (int)RunFunction(my_context, my_error_handler_fct_##A, 2, dpy, error);\
+static uintptr_t my_error_handler_fct_##A = 0;                                          \
+static int my_error_handler_##A(void* dpy, void* error)                                 \
+{                                                                                       \
+    return (int)RunFunctionFmt(my_error_handler_fct_##A, "pp", dpy, error); \
 }
 SUPER()
 #undef GO
@@ -210,10 +215,10 @@ static void* reverse_error_handlerFct(library_t* lib, void* fct)
 
 // ioerror_handler
 #define GO(A)   \
-static uintptr_t my_ioerror_handler_fct_##A = 0;                      \
-static int my_ioerror_handler_##A(void* dpy)   \
-{                                                                   \
-    return (int)RunFunction(my_context, my_ioerror_handler_fct_##A, 1, dpy);\
+static uintptr_t my_ioerror_handler_fct_##A = 0;                                    \
+static int my_ioerror_handler_##A(void* dpy)                                        \
+{                                                                                   \
+    return (int)RunFunctionFmt(my_ioerror_handler_fct_##A, "p", dpy);   \
 }
 SUPER()
 #undef GO
@@ -243,10 +248,10 @@ static void* reverse_ioerror_handlerFct(library_t* lib, void* fct)
 
 // exterror_handler
 #define GO(A)   \
-static uintptr_t my_exterror_handler_fct_##A = 0;                      \
-static int my_exterror_handler_##A(void* dpy, void* err, void* codes, int* ret_code)   \
-{                                                                   \
-    return (int)RunFunction(my_context, my_exterror_handler_fct_##A, 4, dpy, err, codes, ret_code);\
+static uintptr_t my_exterror_handler_fct_##A = 0;                                                           \
+static int my_exterror_handler_##A(void* dpy, void* err, void* codes, int* ret_code)                        \
+{                                                                                                           \
+    return (int)RunFunctionFmt(my_exterror_handler_fct_##A, "pppp", dpy, err, codes, ret_code); \
 }
 SUPER()
 #undef GO
@@ -276,10 +281,10 @@ static void* reverse_exterror_handlerFct(library_t* lib, void* fct)
 
 // close_display
 #define GO(A)   \
-static uintptr_t my_close_display_fct_##A = 0;                      \
-static int my_close_display_##A(void* dpy, void* codes)   \
-{                                                                   \
-    return (int)RunFunction(my_context, my_close_display_fct_##A, 2, dpy, codes);\
+static uintptr_t my_close_display_fct_##A = 0;                                          \
+static int my_close_display_##A(void* dpy, void* codes)                                 \
+{                                                                                       \
+    return (int)RunFunctionFmt(my_close_display_fct_##A, "pp", dpy, codes); \
 }
 SUPER()
 #undef GO
@@ -309,10 +314,10 @@ static void* reverse_close_displayFct(library_t* lib, void* fct)
 
 // register_im
 #define GO(A)   \
-static uintptr_t my_register_im_fct_##A = 0;                        \
-static void my_register_im_##A(void* dpy, void* u, void* d)         \
-{                                                                   \
-    RunFunction(my_context, my_register_im_fct_##A, 3, dpy, u, d);  \
+static uintptr_t my_register_im_fct_##A = 0;                                \
+static void my_register_im_##A(void* dpy, void* u, void* d)                 \
+{                                                                           \
+    RunFunctionFmt(my_register_im_fct_##A, "ppp", dpy, u, d);   \
 }
 SUPER()
 #undef GO
@@ -342,10 +347,10 @@ static void* reverse_register_imFct(library_t* lib, void* fct)
 
 // XConnectionWatchProc
 #define GO(A)   \
-static uintptr_t my_XConnectionWatchProc_fct_##A = 0;                               \
-static void my_XConnectionWatchProc_##A(void* dpy, void* data, int op, void* d)     \
-{                                                                                   \
-    RunFunction(my_context, my_XConnectionWatchProc_fct_##A, 4, dpy, data, op, d);  \
+static uintptr_t my_XConnectionWatchProc_fct_##A = 0;                                       \
+static void my_XConnectionWatchProc_##A(void* dpy, void* data, int op, void* d)             \
+{                                                                                           \
+    RunFunctionFmt(my_XConnectionWatchProc_fct_##A, "ppip", dpy, data, op, d);  \
 }
 SUPER()
 #undef GO
@@ -364,10 +369,10 @@ static void* findXConnectionWatchProcFct(void* fct)
 }
 // xifevent
 #define GO(A)   \
-static uintptr_t my_xifevent_fct_##A = 0;                                   \
-static int my_xifevent_##A(void* dpy, void* event, void* d)                 \
-{                                                                           \
-    return RunFunction(my_context, my_xifevent_fct_##A, 3, dpy, event, d);  \
+static uintptr_t my_xifevent_fct_##A = 0;                                           \
+static int my_xifevent_##A(void* dpy, void* event, void* d)                         \
+{                                                                                   \
+    return RunFunctionFmt(my_xifevent_fct_##A, "ppp", dpy, event, d);   \
 }
 SUPER()
 #undef GO
@@ -386,10 +391,10 @@ static void* findxifeventFct(void* fct)
 }
 // XInternalAsyncHandler
 #define GO(A)   \
-static uintptr_t my_XInternalAsyncHandler_fct_##A = 0;                                              \
-static int my_XInternalAsyncHandler_##A(void* dpy, void* rep, void* buf, int len, void* data)       \
-{                                                                                                   \
-    return RunFunction(my_context, my_XInternalAsyncHandler_fct_##A, 5, dpy, rep, buf, len, data);  \
+static uintptr_t my_XInternalAsyncHandler_fct_##A = 0;                                                      \
+static int my_XInternalAsyncHandler_##A(void* dpy, void* rep, void* buf, int len, void* data)               \
+{                                                                                                           \
+    return RunFunctionFmt(my_XInternalAsyncHandler_fct_##A, "pppip", dpy, rep, buf, len, data); \
 }
 SUPER()
 #undef GO
@@ -409,10 +414,10 @@ static void* findXInternalAsyncHandlerFct(void* fct)
 
 // XSynchronizeProc
 #define GO(A)   \
-static uintptr_t my_XSynchronizeProc_fct_##A = 0;                       \
-static int my_XSynchronizeProc_##A()                                    \
-{                                                                       \
-    return (int)RunFunction(my_context, my_XSynchronizeProc_fct_##A, 0);\
+static uintptr_t my_XSynchronizeProc_fct_##A = 0;                           \
+static int my_XSynchronizeProc_##A()                                        \
+{                                                                           \
+    return (int)RunFunctionFmt(my_XSynchronizeProc_fct_##A, "");\
 }
 SUPER()
 #undef GO
@@ -490,6 +495,293 @@ typedef struct {
 #define XNR6PreeditCallback "r6PreeditCallback"
 #define XNStringConversionCallback "stringConversionCallback"
 
+// utility functions
+#define SUPER() \
+GO(0)   \
+GO(1)   \
+GO(2)   \
+GO(3)   \
+GO(4)
+
+// XNGeometryCallback
+#define GO(A)   \
+static uintptr_t my_XNGeometryCallback_fct_##A = 0;                 \
+static void my_XNGeometryCallback_##A(void* a, void* b, void* c)    \
+{                                                                   \
+    RunFunctionFmt(my_XNGeometryCallback_fct_##A, "ppp", a, b);     \
+}
+SUPER()
+#undef GO
+static void* findXNGeometryCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNGeometryCallback_fct_##A == (uintptr_t)fct) return my_XNGeometryCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNGeometryCallback_fct_##A == 0) {my_XNGeometryCallback_fct_##A = (uintptr_t)fct; return my_XNGeometryCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNGeometryCallback callback\n");
+    return NULL;
+}
+// XNDestroyCallback
+#define GO(A)   \
+static uintptr_t my_XNDestroyCallback_fct_##A = 0;              \
+static void my_XNDestroyCallback_##A(void* a, void* b, void* c) \
+{                                                               \
+    RunFunctionFmt(my_XNDestroyCallback_fct_##A, "ppp", a, b);  \
+}
+SUPER()
+#undef GO
+static void* findXNDestroyCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNDestroyCallback_fct_##A == (uintptr_t)fct) return my_XNDestroyCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNDestroyCallback_fct_##A == 0) {my_XNDestroyCallback_fct_##A = (uintptr_t)fct; return my_XNDestroyCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNDestroyCallback callback\n");
+    return NULL;
+}
+// XNPreeditStartCallback
+#define GO(A)   \
+static uintptr_t my_XNPreeditStartCallback_fct_##A = 0;                 \
+static void my_XNPreeditStartCallback_##A(void* a, void* b, void* c)    \
+{                                                                       \
+    RunFunctionFmt(my_XNPreeditStartCallback_fct_##A, "ppp", a, b);     \
+}
+SUPER()
+#undef GO
+static void* findXNPreeditStartCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNPreeditStartCallback_fct_##A == (uintptr_t)fct) return my_XNPreeditStartCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNPreeditStartCallback_fct_##A == 0) {my_XNPreeditStartCallback_fct_##A = (uintptr_t)fct; return my_XNPreeditStartCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNPreeditStartCallback callback\n");
+    return NULL;
+}
+// XNPreeditDoneCallback
+#define GO(A)   \
+static uintptr_t my_XNPreeditDoneCallback_fct_##A = 0;              \
+static void my_XNPreeditDoneCallback_##A(void* a, void* b, void* c) \
+{                                                                   \
+    RunFunctionFmt(my_XNPreeditDoneCallback_fct_##A, "ppp", a, b);  \
+}
+SUPER()
+#undef GO
+static void* findXNPreeditDoneCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNPreeditDoneCallback_fct_##A == (uintptr_t)fct) return my_XNPreeditDoneCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNPreeditDoneCallback_fct_##A == 0) {my_XNPreeditDoneCallback_fct_##A = (uintptr_t)fct; return my_XNPreeditDoneCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNPreeditDoneCallback callback\n");
+    return NULL;
+}
+// XNPreeditDrawCallback
+#define GO(A)   \
+static uintptr_t my_XNPreeditDrawCallback_fct_##A = 0;              \
+static void my_XNPreeditDrawCallback_##A(void* a, void* b, void* c) \
+{                                                                   \
+    RunFunctionFmt(my_XNPreeditDrawCallback_fct_##A, "ppp", a, b);  \
+}
+SUPER()
+#undef GO
+static void* findXNPreeditDrawCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNPreeditDrawCallback_fct_##A == (uintptr_t)fct) return my_XNPreeditDrawCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNPreeditDrawCallback_fct_##A == 0) {my_XNPreeditDrawCallback_fct_##A = (uintptr_t)fct; return my_XNPreeditDrawCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNPreeditDrawCallback callback\n");
+    return NULL;
+}
+// XNPreeditCaretCallback
+#define GO(A)   \
+static uintptr_t my_XNPreeditCaretCallback_fct_##A = 0;                 \
+static void my_XNPreeditCaretCallback_##A(void* a, void* b, void* c)    \
+{                                                                       \
+    RunFunctionFmt(my_XNPreeditCaretCallback_fct_##A, "ppp", a, b);     \
+}
+SUPER()
+#undef GO
+static void* findXNPreeditCaretCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNPreeditCaretCallback_fct_##A == (uintptr_t)fct) return my_XNPreeditCaretCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNPreeditCaretCallback_fct_##A == 0) {my_XNPreeditCaretCallback_fct_##A = (uintptr_t)fct; return my_XNPreeditCaretCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNPreeditCaretCallback callback\n");
+    return NULL;
+}
+// XNPreeditStateNotifyCallback
+#define GO(A)   \
+static uintptr_t my_XNPreeditStateNotifyCallback_fct_##A = 0;               \
+static void my_XNPreeditStateNotifyCallback_##A(void* a, void* b, void* c)  \
+{                                                                           \
+    RunFunctionFmt(my_XNPreeditStateNotifyCallback_fct_##A, "ppp", a, b);   \
+}
+SUPER()
+#undef GO
+static void* findXNPreeditStateNotifyCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNPreeditStateNotifyCallback_fct_##A == (uintptr_t)fct) return my_XNPreeditStateNotifyCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNPreeditStateNotifyCallback_fct_##A == 0) {my_XNPreeditStateNotifyCallback_fct_##A = (uintptr_t)fct; return my_XNPreeditStateNotifyCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNPreeditStateNotifyCallback callback\n");
+    return NULL;
+}
+// XNStatusStartCallback
+#define GO(A)   \
+static uintptr_t my_XNStatusStartCallback_fct_##A = 0;                  \
+static void my_XNStatusStartCallback_##A(void* a, void* b, void* c)     \
+{                                                                       \
+    RunFunctionFmt(my_XNStatusStartCallback_fct_##A, "ppp", a, b);      \
+}
+SUPER()
+#undef GO
+static void* findXNStatusStartCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNStatusStartCallback_fct_##A == (uintptr_t)fct) return my_XNStatusStartCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNStatusStartCallback_fct_##A == 0) {my_XNStatusStartCallback_fct_##A = (uintptr_t)fct; return my_XNStatusStartCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNStatusStartCallback callback\n");
+    return NULL;
+}
+// XNStatusDoneCallback
+#define GO(A)   \
+static uintptr_t my_XNStatusDoneCallback_fct_##A = 0;               \
+static void my_XNStatusDoneCallback_##A(void* a, void* b, void* c)  \
+{                                                                   \
+    RunFunctionFmt(my_XNStatusDoneCallback_fct_##A, "ppp", a, b);   \
+}
+SUPER()
+#undef GO
+static void* findXNStatusDoneCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNStatusDoneCallback_fct_##A == (uintptr_t)fct) return my_XNStatusDoneCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNStatusDoneCallback_fct_##A == 0) {my_XNStatusDoneCallback_fct_##A = (uintptr_t)fct; return my_XNStatusDoneCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNStatusDoneCallback callback\n");
+    return NULL;
+}
+// XNStatusDrawCallback
+#define GO(A)   \
+static uintptr_t my_XNStatusDrawCallback_fct_##A = 0;               \
+static void my_XNStatusDrawCallback_##A(void* a, void* b, void* c)  \
+{                                                                   \
+    RunFunctionFmt(my_XNStatusDrawCallback_fct_##A, "ppp", a, b);   \
+}
+SUPER()
+#undef GO
+static void* findXNStatusDrawCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNStatusDrawCallback_fct_##A == (uintptr_t)fct) return my_XNStatusDrawCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNStatusDrawCallback_fct_##A == 0) {my_XNStatusDrawCallback_fct_##A = (uintptr_t)fct; return my_XNStatusDrawCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNStatusDrawCallback callback\n");
+    return NULL;
+}
+// XNR6PreeditCallback
+#define GO(A)   \
+static uintptr_t my_XNR6PreeditCallback_fct_##A = 0;                \
+static void my_XNR6PreeditCallback_##A(void* a, void* b, void* c)   \
+{                                                                   \
+    RunFunctionFmt(my_XNR6PreeditCallback_fct_##A, "ppp", a, b);    \
+}
+SUPER()
+#undef GO
+static void* findXNR6PreeditCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNR6PreeditCallback_fct_##A == (uintptr_t)fct) return my_XNR6PreeditCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNR6PreeditCallback_fct_##A == 0) {my_XNR6PreeditCallback_fct_##A = (uintptr_t)fct; return my_XNR6PreeditCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNR6PreeditCallback callback\n");
+    return NULL;
+}
+// XNStringConversionCallback
+#define GO(A)   \
+static uintptr_t my_XNStringConversionCallback_fct_##A = 0;                 \
+static void my_XNStringConversionCallback_##A(void* a, void* b, void* c)    \
+{                                                                           \
+    RunFunctionFmt(my_XNStringConversionCallback_fct_##A, "ppp", a, b);     \
+}
+SUPER()
+#undef GO
+static void* findXNStringConversionCallbackFct(void* fct)
+{
+    if(!fct) return NULL;
+    void* p;
+    if((p = GetNativeFnc((uintptr_t)fct))) return p;
+    #define GO(A) if(my_XNStringConversionCallback_fct_##A == (uintptr_t)fct) return my_XNStringConversionCallback_##A;
+    SUPER()
+    #undef GO
+    #define GO(A) if(my_XNStringConversionCallback_fct_##A == 0) {my_XNStringConversionCallback_fct_##A = (uintptr_t)fct; return my_XNStringConversionCallback_##A; }
+    SUPER()
+    #undef GO
+    printf_log(LOG_NONE, "Warning, no more slot for libX11 XNStringConversionCallback callback\n");
+    return NULL;
+}
+
+#undef SUPER
+
 #define SUPER()                     \
 GO(XNGeometryCallback)              \
 GO(XNDestroyCallback)               \
@@ -503,24 +795,6 @@ GO(XNStatusDoneCallback)            \
 GO(XNStatusDrawCallback)            \
 GO(XNR6PreeditCallback)             \
 GO(XNStringConversionCallback)
-
-#define GO(A)                                                               \
-static uintptr_t my_XICProc_fct_##A = 0;                                    \
-static int my_XICProc_##A(void* a, void* b, void* c)                        \
-{                                                                           \
-    if (my_XICProc_fct_##A == 0)                                            \
-        printf_log(LOG_NONE, "%s cannot find XICProc callback\n", __func__);\
-    return (int)RunFunction(my_context, my_XICProc_fct_##A, 3, a, b, c);    \
-}                                                                           \
-static uintptr_t my_XIMProc_fct_##A = 0;                                    \
-static void my_XIMProc_##A(void* a, void* b, void* c)                       \
-{                                                                           \
-    if (my_XIMProc_fct_##A == 0)                                            \
-        printf_log(LOG_NONE, "%s cannot find XIMProc callback\n", __func__);\
-    RunFunction(my_context, my_XIMProc_fct_##A, 3, a, b, c);                \
-}
-SUPER()
-#undef GO
 
 #define VA_CALL(FUNC, FIRST_ARG, VAARGS, VAARGSZ, RESULT)       \
 switch (VAARGSZ)                                                \
@@ -560,21 +834,17 @@ default:                                                                        
     break;                                                                                                              \
 }
 
-#define GO(A)                                                                       \
-if (va[i] && strcmp((char*)va[i], A) == 0) {                                        \
-    XICCallback* origin = (XICCallback*)va[i+1];                                    \
-    XICCallback* new = callbacks + i;                                               \
-    new->client_data = origin->client_data;                                         \
-    my_XICProc_fct_##A = (uintptr_t)origin->callback;                               \
-    new->callback = my_XICProc_##A;                                                 \
-    new_va[i+1] = new;                                                              \
+#define GO(A)                                       \
+if (va[i] && strcmp((char*)va[i], A) == 0) {        \
+    XICCallback* origin = (XICCallback*)va[i+1];    \
+    new_va[i+1] = find##A##Fct(origin);             \
 }
 
 EXPORT void* my_XVaCreateNestedList(x86emu_t* emu, int unused, void** va) {
     int n = 0;
+    (void)emu;
     while (va[n]) n+=2;
     void** new_va = alloca(sizeof(void*) * n);
-    XICCallback* callbacks = (XICCallback*)alloca(sizeof(XIMCallback) * n);
 
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -582,16 +852,16 @@ EXPORT void* my_XVaCreateNestedList(x86emu_t* emu, int unused, void** va) {
         SUPER()
     }
 
-    void* res;
+    void* res = NULL;
     VA_CALL(my->XVaCreateNestedList, unused, new_va, n, res);
     return res;
 }
 
 EXPORT void* my_XCreateIC(x86emu_t* emu, void* xim, void** va) {
     int n = 0;
+    (void)emu;
     while (va[n]) n+=2;
     void** new_va = alloca(sizeof(void*) * n);
-    XICCallback* callbacks = (XICCallback*)alloca(sizeof(XIMCallback) * n);
 
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -599,16 +869,16 @@ EXPORT void* my_XCreateIC(x86emu_t* emu, void* xim, void** va) {
         SUPER()
     }
 
-    void* res;
+    void* res = NULL;
     VA_CALL(my->XCreateIC, xim, new_va, n, res);
     return res;
 }
 
 EXPORT void* my_XSetICValues(x86emu_t* emu, void* xic, void** va) {
     int n = 0;
+    (void)emu;
     while (va[n]) n+=2;
     void** new_va = alloca(sizeof(void*) * n);
-    XICCallback* callbacks = (XICCallback*)alloca(sizeof(XIMCallback) * n);
 
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -616,7 +886,7 @@ EXPORT void* my_XSetICValues(x86emu_t* emu, void* xic, void** va) {
         SUPER()
     }
 
-    void* res; 
+    void* res = NULL;
     VA_CALL(my->XSetICValues, xic, new_va, n, res);
     return res;
 }
@@ -624,18 +894,14 @@ EXPORT void* my_XSetICValues(x86emu_t* emu, void* xic, void** va) {
 
 EXPORT void* my_XSetIMValues(x86emu_t* emu, void* xim, void** va) {
     int n = 0;
+    (void)emu;
     while (va[n]) n+=2;
     void** new_va = alloca(sizeof(void*) * n);
-    XIMCallback* callbacks = (XIMCallback*)alloca(sizeof(XIMCallback) * n);
 
-    #define GO(A)                                                                       \
-    if (va[i] && strcmp((char*)va[i], A) == 0) {                                        \
-        XIMCallback* origin = (XIMCallback*)va[i+1];                                    \
-        XIMCallback* new = callbacks + i;                                               \
-        new->client_data = origin->client_data;                                         \
-        my_XIMProc_fct_##A = (uintptr_t)origin->callback;                               \
-        new->callback = my_XIMProc_##A;                                                 \
-        new_va[i+1] = new;                                                              \
+    #define GO(A)                                       \
+    if (va[i] && strcmp((char*)va[i], A) == 0) {        \
+        XIMCallback* origin = (XIMCallback*)va[i+1];    \
+        new_va[i+1] = find##A##Fct(origin);             \
     }
     for (int i = 0; i < n; i += 2) {
         new_va[i] = va[i];
@@ -644,7 +910,7 @@ EXPORT void* my_XSetIMValues(x86emu_t* emu, void* xim, void** va) {
     }
     #undef GO
     
-    void* res;
+    void* res = NULL;
     VA_CALL(my->XSetIMValues, xim, new_va, n, res)
     return res;
 }
@@ -653,42 +919,49 @@ EXPORT void* my_XSetIMValues(x86emu_t* emu, void* xim, void** va) {
 
 EXPORT void* my_XSetErrorHandler(x86emu_t* emu, XErrorHandler handler)
 {
+    (void)emu;
     void* ret = my->XSetErrorHandler(finderror_handlerFct(handler));
     return reverse_error_handlerFct(my_lib, ret);
 }
 
 EXPORT void* my_XSetIOErrorHandler(x86emu_t* emu, XIOErrorHandler handler)
 {
+    (void)emu;
     void* ret = my->XSetIOErrorHandler(findioerror_handlerFct(handler));
     return reverse_ioerror_handlerFct(my_lib, ret);
 }
 
 EXPORT void* my_XESetError(x86emu_t* emu, void* display, int32_t extension, void* handler)
 {
+    (void)emu;
     void* ret = my->XESetError(display, extension, findexterror_handlerFct(handler));
     return reverse_exterror_handlerFct(my_lib, ret);
 }
 
 EXPORT void* my_XESetCloseDisplay(x86emu_t* emu, void* display, int32_t extension, void* handler)
 {
+    (void)emu;
     void* ret = my->XESetCloseDisplay(display, extension, findclose_displayFct(handler));
     return reverse_close_displayFct(my_lib, ret);
 }
 
 EXPORT int32_t my_XIfEvent(x86emu_t* emu, void* d,void* ev, EventHandler h, void* arg)
 {
+    (void)emu;
     int32_t ret = my->XIfEvent(d, ev, findxifeventFct(h), arg);
     return ret;
 }
 
 EXPORT int32_t my_XCheckIfEvent(x86emu_t* emu, void* d,void* ev, EventHandler h, void* arg)
 {
+    (void)emu;
     int32_t ret = my->XCheckIfEvent(d, ev, findxifeventFct(h), arg);
     return ret;
 }
 
 EXPORT int32_t my_XPeekIfEvent(x86emu_t* emu, void* d,void* ev, EventHandler h, void* arg)
 {
+    (void)emu;
     int32_t ret = my->XPeekIfEvent(d, ev, findxifeventFct(h), arg);
     return ret;
 }
@@ -703,7 +976,7 @@ void BridgeImageFunc(x86emu_t *emu, XImage *img)
 
     #define GO(A, W) \
     fnc = CheckBridged(system, img->f.A); \
-    if(!fnc) fnc = AddAutomaticBridge(emu, system, W, img->f.A, 0); \
+    if(!fnc) fnc = AddAutomaticBridge(emu, system, W, img->f.A, 0, #A); \
     img->f.A = (W##_t)fnc;
 
     uintptr_t fnc;
@@ -719,6 +992,7 @@ void BridgeImageFunc(x86emu_t *emu, XImage *img)
 
 void UnbridgeImageFunc(x86emu_t *emu, XImage *img)
 {
+    (void)emu;
     #define GO(A, W) \
     fnc = GetNativeFnc((uintptr_t)img->f.A); \
     if(fnc) \
@@ -758,7 +1032,6 @@ EXPORT void* my_XCreateImage(x86emu_t* emu, void* disp, void* vis, uint32_t dept
 
 EXPORT int32_t my_XInitImage(x86emu_t* emu, void* img)
 {
-
     int ret = my->XInitImage(img);
     // bridge all access functions...
     BridgeImageFunc(emu, img);
@@ -824,12 +1097,14 @@ typedef struct xintasync_s {
 
 EXPORT void my__XDeqAsyncHandler(x86emu_t* emu, void* cb, void* data)
 {
+    (void)emu;
     my->_XDeqAsyncHandler(findXInternalAsyncHandlerFct(cb), data);
 }
 
 #ifdef PANDORA
 EXPORT void* my_XLoadQueryFont(x86emu_t* emu, void* d, void* name)
 {
+    (void)emu;
     // basic font substitution...
 
     if(strcmp(name, "9x15")==0)
@@ -849,12 +1124,14 @@ static uint32_t recode32to16(uint32_t c)
 }
 EXPORT int32_t my_XSetBackground(x86emu_t* emu, void* d, void* gc, uint32_t c)
 {
+    (void)emu;
     if(x11color16)
         c = recode32to16(c);
     return my->XSetBackground(d, gc, c);
 }
 EXPORT int32_t my_XSetForeground(x86emu_t* emu, void* d, void* gc, uint32_t c)
 {
+    (void)emu;
     if(x11color16)
         c = recode32to16(c);
     return my->XSetForeground(d, gc, c);
@@ -887,7 +1164,7 @@ typedef struct XGCValues_s {
 
 EXPORT void* my_XCreateGC(x86emu_t *emu, void* disp, void* d, uint32_t v, void* vs)
 {
-
+    (void)emu;
     int setfore = 0;
     int setback = 0;
     uint32_t fore = 0; 
@@ -915,6 +1192,7 @@ EXPORT void* my_XCreateGC(x86emu_t *emu, void* disp, void* d, uint32_t v, void* 
 
 EXPORT void* my_XESetWireToEvent(x86emu_t* emu, void* display, int32_t event_number, void* proc)
 {
+    (void)emu;
     void* ret = NULL;
 
     ret = my->XESetWireToEvent(display, event_number, findwire_to_eventFct(proc));
@@ -923,6 +1201,7 @@ EXPORT void* my_XESetWireToEvent(x86emu_t* emu, void* display, int32_t event_num
 }
 EXPORT void* my_XESetEventToWire(x86emu_t* emu, void* display, int32_t event_number, void* proc)
 {
+    (void)emu;
     void* ret = NULL;
 
     ret = my->XESetEventToWire(display, event_number, findevent_to_wireFct(proc));
@@ -932,26 +1211,26 @@ EXPORT void* my_XESetEventToWire(x86emu_t* emu, void* display, int32_t event_num
 
 EXPORT int my_XCloseDisplay(x86emu_t* emu, void* display)
 {
-
+    (void)emu;
     int ret = my->XCloseDisplay(display);
     return ret;
 }
 
 EXPORT int my_XRegisterIMInstantiateCallback(x86emu_t* emu, void* d, void* db, void* res_name, void* res_class, void* cb, void* data)
 {
-
+    (void)emu;
     return my->XRegisterIMInstantiateCallback(d, db, res_name, res_class, findregister_imFct(cb), data);
 }
     
 EXPORT int my_XUnregisterIMInstantiateCallback(x86emu_t* emu, void* d, void* db, void* res_name, void* res_class, void* cb, void* data)
 {
-
+    (void)emu;
     return my->XUnregisterIMInstantiateCallback(d, db, res_name, res_class, reverse_register_imFct(my_lib, cb), data);
 }
 
 EXPORT int my_XQueryExtension(x86emu_t* emu, void* display, char* name, int* major, int* first_event, int* first_error)
 {
-
+    (void)emu;
     int ret = my->XQueryExtension(display, name, major, first_event, first_error);
     if(!ret && name && !strcmp(name, "GLX") && box86_x11glx) {
         // hack to force GLX to be accepted, even if not present
@@ -963,25 +1242,25 @@ EXPORT int my_XQueryExtension(x86emu_t* emu, void* display, char* name, int* maj
 
 EXPORT int my_XAddConnectionWatch(x86emu_t* emu, void* display, char* f, void* data)
 {
-
+    (void)emu;
     return my->XAddConnectionWatch(display, findXConnectionWatchProcFct(f), data);
 }
 
 EXPORT int my_XRemoveConnectionWatch(x86emu_t* emu, void* display, char* f, void* data)
 {
-
+    (void)emu;
     return my->XRemoveConnectionWatch(display, findXConnectionWatchProcFct(f), data);
 }
 
 EXPORT void* my_XSetAfterFunction(x86emu_t* emu, void* display, void* f)
 {
-
+    (void)emu;
     return reverse_XSynchronizeProcFct(my_lib, my->XSetAfterFunction(display, findXSynchronizeProcFct(f)));
 }
 
 EXPORT void* my_XSynchronize(x86emu_t* emu, void* display, int onoff)
 {
-
+    (void)emu;
     return reverse_XSynchronizeProcFct(my_lib, my->XSynchronize(display, onoff));
 }
 
@@ -1150,12 +1429,12 @@ EXPORT void* my_XOpenDisplay(x86emu_t* emu, void* d)
     #define GO(A, W)\
     if(dpy->A)      \
         if(!CheckBridged(system, dpy->A)) \
-            AddAutomaticBridge(emu, system, W, dpy->A, 0); \
+            AddAutomaticBridge(emu, system, W, dpy->A, 0, #A); \
 
     #define GO2(A, B, W) \
     if(dpy->A && dpy->A->B)  \
         if(!CheckBridged(system, dpy->A->B)) \
-            AddAutomaticBridge(emu, system, W, dpy->A->B, 0); \
+            AddAutomaticBridge(emu, system, W, dpy->A->B, 0, #A "_" #B); \
 
 
     GO2(free_funcs, atoms, vFp)
@@ -1286,6 +1565,7 @@ static void UnalignedXIDeviceEvent(void* data)
 }
 EXPORT int my_XGetEventData(x86emu_t* emu, void* dpy, my_XGenericEventCookie_t* cookie)
 {
+    (void)emu;
     if(xi_opcode==-2) {
         int event, error;
         if(!my->XQueryExtension(dpy, "XInputExtension", &xi_opcode, &event, &error)) {
@@ -1310,6 +1590,7 @@ EXPORT int my_XGetEventData(x86emu_t* emu, void* dpy, my_XGenericEventCookie_t* 
 
 EXPORT void my_XFreeEventData(x86emu_t* emu, void* dpy, my_XGenericEventCookie_t* cookie)
 {
+    (void)emu;
     if(cookie && cookie==saved_cookie) {
         cookie->data = saved_xideviceevent;
         saved_xideviceevent = NULL;
@@ -1318,10 +1599,17 @@ EXPORT void my_XFreeEventData(x86emu_t* emu, void* dpy, my_XGenericEventCookie_t
     my->XFreeEventData(dpy, cookie);
 }
 
-#define CUSTOM_INIT                 \
-    getMy(lib);                     \
-    setNeededLibs(lib, 1, "libdl.so.2"); \
-    if(box86_x11threads) my->XInitThreads();
+#ifdef ANDROID
+    #define CUSTOM_INIT                 \
+        getMy(lib);                     \
+        setNeededLibs(lib, 1, "libdl.so"); \
+        if(box86_x11threads) my->XInitThreads();
+#else
+    #define CUSTOM_INIT                 \
+        getMy(lib);                     \
+        setNeededLibs(lib, 1, "libdl.so.2"); \
+        if(box86_x11threads) my->XInitThreads();
+#endif
 
 #define CUSTOM_FINI \
     freeMy();

@@ -24,7 +24,7 @@
 
 // Get Ex as a double, not a quad (warning, x2 and x3 may get used)
 #define GETEX(a, w)                                 \
-    if((nextop&0xC0)==0xC0) {                       \
+    if(MODREG) {                       \
         a = sse_get_reg(dyn, ninst, x1, nextop&7,w);\
     } else {    \
         parity = getedparity(dyn, ninst, addr, nextop, 3);  \
@@ -68,7 +68,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             INST_NAME("MOVSD Gx, Ex");
             nextop = F8;
             gd = (nextop&0x38)>>3;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 v0 = sse_get_reg(dyn, ninst, x1, gd, 1);
                 d0 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
                 VMOVD(v0, d0);
@@ -87,7 +87,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             nextop = F8;
             gd = (nextop&0x38)>>3;
             v0 = sse_get_reg(dyn, ninst, x1, gd, 0);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 d0 = sse_get_reg(dyn, ninst, x1, nextop&7, 1);
                 VMOVD(d0, v0);
             } else {
@@ -102,7 +102,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             INST_NAME("MOVDDUP Gx, Ex");
             nextop = F8;
             gd = (nextop&0x38)>>3;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 d0 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
                 v0 = sse_get_reg_empty(dyn, ninst, x1, gd);
                 VMOVD(v0, d0);
@@ -133,7 +133,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             nextop = F8;
             GETGD;
             s0 = fpu_get_scratch_single(dyn);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 d0 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
             } else {
                 SMREAD();
@@ -141,16 +141,31 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
                 d0 = fpu_get_scratch_double(dyn);
                 VLDR_64(d0, ed, fixedaddress);
             }
+            if(!box86_dynarec_fastround) {
+                VMRS(x14);   // Get FPCSR reg to clear exceptions flags
+                ORR_IMM8(x3, x14, 0b010, 9); // enable exceptions
+                BIC_IMM8(x3, x3, 0b10011111, 0);
+                VMSR(x3);
+            }
             VCVT_S32_F64(s0, d0);
             VMOVfrV(gd, s0);
+            if(!box86_dynarec_fastround) {
+                VMRS(x3);   // get the FPCSR reg and test FPU exception (IO only)
+                TSTS_IMM8_ROR(x3, 0b00000001, 0);
+                MOV_IMM_COND(cNE, gd, 0b10, 1);   // 0x80000000
+                VMSR(x14);  // put back values
+            }
             break;
         case 0x2D:
             INST_NAME("CVTSD2SI Gd, Ex");
-            u8 = sse_setround(dyn, ninst, x1, x2, x14);
+            if(!box86_dynarec_fastround)
+                u8 = sse_setround_reset(dyn, ninst, x1, x2, x14);
+            else
+                u8 = sse_setround(dyn, ninst, x1, x2, x14);
             nextop = F8;
             GETGD;
             s0 = fpu_get_scratch_single(dyn);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 d0 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
             } else {
                 SMREAD();
@@ -160,6 +175,11 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             }
             VCVTR_S32_F64(s0, d0);
             VMOVfrV(gd, s0);
+            if(!box86_dynarec_fastround) {
+                VMRS(x3);   // get the FPCSR reg and test FPU exception (IO only)
+                TSTS_IMM8_ROR(x3, 0b00000001, 0);
+                MOV_IMM_COND(cNE, gd, 0b10, 1);   // 0x80000000
+            }
             x87_restoreround(dyn, ninst, u8);
             break;
 
@@ -308,7 +328,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             nextop = F8;
             gd = (nextop&0x38)>>3;
             v0 = sse_get_reg(dyn, ninst, x1, gd, 1);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 v1 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
             } else {
                 SMREAD();
@@ -344,7 +364,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             nextop = F8;
             gd = (nextop&0x38)>>3;
             v0 = sse_get_reg(dyn, ninst, x1, gd, 1);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 v1 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
             } else {
                 SMREAD();
@@ -414,7 +434,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             nextop = F8;
             gd = (nextop&0x38)>>3;
             v0 = sse_get_reg(dyn, ninst, x1, gd, 1);
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 v1 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
             } else {
                 SMREAD();
@@ -440,7 +460,7 @@ uintptr_t dynarecF20F(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int nins
             INST_NAME("LDDQ Gx,Ex");
             nextop = F8;
             gd = (nextop&0x38)>>3;
-            if((nextop&0xC0)==0xC0) {
+            if(MODREG) {
                 v1 = sse_get_reg(dyn, ninst, x1, nextop&7, 0);
                 v0 = sse_get_reg_empty(dyn, ninst, x1, gd);
                 VMOVQ(v0, v1);

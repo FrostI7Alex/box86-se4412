@@ -23,6 +23,7 @@ void myStackAlign(const char* fmt, uint32_t* st, uint32_t* mystack);
 void myStackAlignGVariantNew(const char* fmt, uint32_t* st, uint32_t* mystack);
 void myStackAlignW(const char* fmt, uint32_t* st, uint32_t* mystack);
 
+void AlignStat64(const void* source, void* dest);
 void UnalignStat64(const void* source, void* dest);
 
 void UnalignStatFS64(const void* source, void* dest);
@@ -345,3 +346,19 @@ typedef struct my_GValue_s
 
 void alignNGValue(my_GValue_t* v, void* value, int n);
 void unalignNGValue(void* value, my_GValue_t* v, int n);
+
+// longjmp / setjmp
+typedef struct jump_buff_i386_s {
+ uint32_t save_ebx;
+ uint32_t save_esi;
+ uint32_t save_edi;
+ uint32_t save_ebp;
+ uint32_t save_esp;
+ uint32_t save_eip;
+} jump_buff_i386_t;
+
+typedef struct __jmp_buf_tag_s {
+    jump_buff_i386_t __jmpbuf;
+    int              __mask_was_saved;
+    sigset_t         __saved_mask;
+} __jmp_buf_tag_t;

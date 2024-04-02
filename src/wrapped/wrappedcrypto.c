@@ -37,10 +37,10 @@ GO(4)
 
 // ENGINE_ctrl_cb
 #define GO(A)   \
-static uintptr_t my_ENGINE_ctrl_cb_fct_##A = 0;                                                      \
-static void my_ENGINE_ctrl_cb_##A()                    \
-{                                                                                                   \
-    RunFunction(my_context, my_ENGINE_ctrl_cb_fct_##A, 0);  \
+static uintptr_t my_ENGINE_ctrl_cb_fct_##A = 0;                 \
+static void my_ENGINE_ctrl_cb_##A()                             \
+{                                                               \
+    RunFunctionFmt(my_ENGINE_ctrl_cb_fct_##A, "");  \
 }
 SUPER()
 #undef GO
@@ -61,10 +61,10 @@ static void* find_ENGINE_ctrl_cb_Fct(void* fct)
 
 // cmp_fnc
 #define GO(A)   \
-static uintptr_t my_cmp_fnc_fct_##A = 0;                                \
-static int my_cmp_fnc_##A(void* a, void* b)                             \
-{                                                                       \
-    return (int)RunFunction(my_context, my_cmp_fnc_fct_##A, 2, a, b);   \
+static uintptr_t my_cmp_fnc_fct_##A = 0;                                    \
+static int my_cmp_fnc_##A(void* a, void* b)                                 \
+{                                                                           \
+    return (int)RunFunctionFmt(my_cmp_fnc_fct_##A, "pp", a, b); \
 }
 SUPER()
 #undef GO
@@ -85,10 +85,10 @@ static void* find_cmp_fnc_Fct(void* fct)
 
 // free_fnc
 #define GO(A)   \
-static uintptr_t my_free_fnc_fct_##A = 0;               \
-static void my_free_fnc_##A(void* p)                    \
-{                                                       \
-    RunFunction(my_context, my_free_fnc_fct_##A, 1, p); \
+static uintptr_t my_free_fnc_fct_##A = 0;                       \
+static void my_free_fnc_##A(void* p)                            \
+{                                                               \
+    RunFunctionFmt(my_free_fnc_fct_##A, "p", p);    \
 }
 SUPER()
 #undef GO
@@ -109,10 +109,10 @@ static void* find_free_fnc_Fct(void* fct)
 
 // id_func
 #define GO(A)   \
-static uintptr_t my_id_func_fct_##A = 0;                                    \
-static unsigned long my_id_func_##A()                                       \
-{                                                                           \
-    return (unsigned long)RunFunction(my_context, my_id_func_fct_##A, 0);   \
+static uintptr_t my_id_func_fct_##A = 0;                                        \
+static unsigned long my_id_func_##A()                                           \
+{                                                                               \
+    return (unsigned long)RunFunctionFmt(my_id_func_fct_##A, "");   \
 }
 SUPER()
 #undef GO
@@ -133,10 +133,10 @@ static void* find_id_func_Fct(void* fct)
 
 // lock_func
 #define GO(A)   \
-static uintptr_t my_lock_func_fct_##A = 0;                              \
-static void my_lock_func_##A(int mode, int n, void* f, int l)           \
-{                                                                       \
-    RunFunction(my_context, my_lock_func_fct_##A, 4, mode, n, f, l);    \
+static uintptr_t my_lock_func_fct_##A = 0;                                  \
+static void my_lock_func_##A(int mode, int n, void* f, int l)               \
+{                                                                           \
+    RunFunctionFmt(my_lock_func_fct_##A, "iipi", mode, n, f, l);\
 }
 SUPER()
 #undef GO
@@ -157,10 +157,10 @@ static void* find_lock_func_Fct(void* fct)
 
 // passphrase
 #define GO(A)   \
-static uintptr_t my_passphrase_fct_##A = 0;                                             \
-static int my_passphrase_##A(void* buff, int size, int rw, void* u)                     \
-{                                                                                       \
-    return (int)RunFunction(my_context, my_passphrase_fct_##A, 4, buff, size, rw, u);   \
+static uintptr_t my_passphrase_fct_##A = 0;                                                     \
+static int my_passphrase_##A(void* buff, int size, int rw, void* u)                             \
+{                                                                                               \
+    return (int)RunFunctionFmt(my_passphrase_fct_##A, "piip", buff, size, rw, u);   \
 }
 SUPER()
 #undef GO
@@ -183,76 +183,91 @@ static void* find_passphrase_Fct(void* fct)
 
 EXPORT int32_t my_ENGINE_ctrl(x86emu_t* emu, void* e, int32_t cmd, int32_t i, void* p, void* f)
 {
+    (void)emu;
     return my->ENGINE_ctrl(e, cmd, i, p, find_ENGINE_ctrl_cb_Fct(f));
 }
 
 EXPORT int32_t my_ENGINE_ctrl_cmd(x86emu_t* emu, void* e, void* cmd, long i, void* p, void* f, int optional)
 {
+    (void)emu;
     return my->ENGINE_ctrl_cmd(e, cmd, i, p, find_ENGINE_ctrl_cb_Fct(f), optional);
 }
 
 EXPORT void my_CRYPTO_set_id_callback(x86emu_t* emu, void* cb)
 {
+    (void)emu;
     my->CRYPTO_set_id_callback(find_id_func_Fct(cb));
 }
 
 EXPORT void my_CRYPTO_set_locking_callback(x86emu_t* emu, void* cb)
 {
+    (void)emu;
     my->CRYPTO_set_locking_callback(find_lock_func_Fct(cb));
 }
 
 EXPORT void my_PEM_read_bio_DSAPrivateKey(x86emu_t* emu, void* bp, void* x, void* cb, void* u)
 {
+    (void)emu;
     my->PEM_read_bio_DSAPrivateKey(bp, x, find_passphrase_Fct(cb), u);
 }
 
 EXPORT void my_PEM_read_bio_DSA_PUBKEY(x86emu_t* emu, void* bp, void* x, void* cb, void* u)
 {
+    (void)emu;
     my->PEM_read_bio_DSA_PUBKEY(bp, x, find_passphrase_Fct(cb), u);
 }
 
 EXPORT void my_PEM_read_bio_RSAPrivateKey(x86emu_t* emu, void* bp, void* x, void* cb, void* u)
 {
+    (void)emu;
     my->PEM_read_bio_RSAPrivateKey(bp, x, find_passphrase_Fct(cb), u);
 }
 
 EXPORT void my_PEM_read_bio_RSA_PUBKEY(x86emu_t* emu, void* bp, void* x, void* cb, void* u)
 {
+    (void)emu;
     my->PEM_read_bio_RSA_PUBKEY(bp, x, find_passphrase_Fct(cb), u);
 }
 
 EXPORT void my_PEM_read_bio_ECPrivateKey(x86emu_t* emu, void* bp, void* x, void* cb, void* u)
 {
+    (void)emu;
     my->PEM_read_bio_ECPrivateKey(bp, x, find_passphrase_Fct(cb), u);
 }
 
 EXPORT void my_PEM_read_bio_EC_PUBKEY(x86emu_t* emu, void* bp, void* x, void* cb, void* u)
 {
+    (void)emu;
     my->PEM_read_bio_EC_PUBKEY(bp, x, find_passphrase_Fct(cb), u);
 }
 
 EXPORT int my_PEM_write_bio_DSAPrivateKey(x86emu_t* emu, void* bp, void* x, void* e, void* str, int len, void* cb, void* u)
 {
+    (void)emu;
     return my->PEM_write_bio_DSAPrivateKey(bp, x, e, str, len, find_passphrase_Fct(cb), u);
 }
 
 EXPORT int my_PEM_write_bio_RSAPrivateKey(x86emu_t* emu, void* bp, void* x, void* e, void* str, int len, void* cb, void* u)
 {
+    (void)emu;
     return my->PEM_write_bio_RSAPrivateKey(bp, x, e, str, len, find_passphrase_Fct(cb), u);
 }
 
 EXPORT int my_PEM_write_bio_ECPrivateKey(x86emu_t* emu, void* bp, void* x, void* e, void* str, int len, void* cb, void* u)
 {
+    (void)emu;
     return my->PEM_write_bio_ECPrivateKey(bp, x, e, str, len, find_passphrase_Fct(cb), u);
 }
 
 EXPORT void* my_sk_new(x86emu_t* emu, void* f)
 {
+    (void)emu;
     return my->sk_new(find_cmp_fnc_Fct(f));
 }
 
 EXPORT void my_sk_pop_free(x86emu_t* emu, void* st, void* f)
 {
+    (void)emu;
     my->sk_pop_free(st, find_free_fnc_Fct(f));
 }
 

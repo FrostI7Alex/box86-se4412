@@ -56,30 +56,31 @@ typedef struct my_SmcCallbacks_s {
 static uintptr_t my_save_yourself_fct = 0;
 static void my_save_yourself(void* smcConn, void* clientData, int saveType, int shutdown, int interactStyle, int fast)
 {
-    RunFunction(my_context, my_save_yourself_fct, 6, smcConn, clientData, saveType, shutdown, interactStyle, fast);
+    RunFunctionFmt(my_save_yourself_fct, "ppiiii", smcConn, clientData, saveType, shutdown, interactStyle, fast);
 }
 
 static uintptr_t my_die_fct = 0;
 static void my_die(void* smcConn, void* clientData)
 {
-    RunFunction(my_context, my_die_fct, 2, smcConn, clientData);
+    RunFunctionFmt(my_die_fct, "pp", smcConn, clientData);
 }
 
 static uintptr_t my_shutdown_cancelled_fct = 0;
 static void my_shutdown_cancelled(void* smcConn, void* clientData)
 {
-    RunFunction(my_context, my_shutdown_cancelled_fct, 2, smcConn, clientData);
+    RunFunctionFmt(my_shutdown_cancelled_fct, "pp", smcConn, clientData);
 }
 
 static uintptr_t my_save_complete_fct = 0;
 static void my_save_complete(void* smcConn, void* clientData)
 {
-    RunFunction(my_context, my_save_complete_fct, 2, smcConn, clientData);
+    RunFunctionFmt(my_save_complete_fct, "pp", smcConn, clientData);
 }
 
 
 EXPORT void* my_SmcOpenConnection(x86emu_t* emu, void* networkIdsList, void* context, int major, int minor, unsigned long mask, my_SmcCallbacks_t* cb, void* previousId, void* clientIdRet, int errorLength, void* errorRet)
 {
+    (void)emu;
     my_SmcCallbacks_t nat = {0};
     #define GO(A, B) if(mask&A) {my_##B##_fct = (uintptr_t)cb->B.callback; nat.B.callback = my_##B; nat.B.client_data=cb->B.client_data;}
     GO(SmcSaveYourselfProcMask, save_yourself)
@@ -100,10 +101,10 @@ GO(4)
 
 // Request
 #define GO(A)   \
-static uintptr_t my_Request_fct_##A = 0;        \
-static void my_Request_##A(void* a, void* b)     \
-{                                               \
-    RunFunction(my_context, my_Request_fct_##A, 2, a, b);\
+static uintptr_t my_Request_fct_##A = 0;                        \
+static void my_Request_##A(void* a, void* b)                    \
+{                                                               \
+    RunFunctionFmt(my_Request_fct_##A, "pp", a, b); \
 }
 SUPER()
 #undef GO
@@ -126,11 +127,13 @@ static void* findRequestFct(void* fct)
 
 EXPORT int my_SmcInteractRequest(x86emu_t* emu, void* smcConn, int f, void* cb, void* data)
 {
+    (void)emu;
     return my->SmcInteractRequest(smcConn, f, findRequestFct(cb), data);
 }
 
 EXPORT int my_SmcRequestSaveYourselfPhase2(x86emu_t* emu, void* smcConn, void* cb, void* data)
 {
+    (void)emu;
     return my->SmcRequestSaveYourselfPhase2(smcConn, findRequestFct(cb), data);
 }
 
@@ -141,4 +144,3 @@ EXPORT int my_SmcRequestSaveYourselfPhase2(x86emu_t* emu, void* smcConn, void* c
     freeMy();
 
 #include "wrappedlib_init.h"
-

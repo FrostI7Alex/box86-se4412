@@ -17,7 +17,7 @@ typedef struct onesymbol_s {
 } onesymbol_t;
 
 typedef struct versymbol_s {
-    int         version;    // -1 = no-version, 0=local, 1=global, X=versionned
+    int         version;    // -1 = no-version, 0=local, 1=global, X=versioned
     const char* vername;    // NULL or version name if version=X
     onesymbol_t sym;
 } versymbol_t;
@@ -122,7 +122,7 @@ static versymbol_t* MatchVersion(versymbols_t* s, int ver, const char* vername, 
         if(!ret) ret = FindNoVersion(s, size);
         if(!ret) ret = FindVersionGlobal(s, size);
         if(!ret && defver) ret = FindVersion(s, size, defver);
-        //if(!ret) ret = FindFirstVersion(s);
+        //if(!ret) ret = FindFirstVersion(s, size);
         return ret;
     }
     if(ver==-2) {
@@ -168,6 +168,19 @@ void AddSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr, ui
     v->syms[idx].vername = vername;
     v->syms[idx].sym.offs = addr;
     v->syms[idx].sym.sz = sz;
+}
+
+void ForceUpdateSymbol(kh_mapsymbols_t *mapsymbols, const char* name, uintptr_t addr, uint32_t sz)
+{
+    int ret;
+    khint_t k = kh_put(mapsymbols, mapsymbols, name, &ret);
+    versymbols_t * v = &kh_val(mapsymbols, k);
+    if(ret) {v->sz = v->cap = 0; v->syms = NULL;}
+    // now check if that version already exist, and update record and exit if yes
+    for(int i=0; i<v->sz; ++i) {
+        v->syms[i].sym.offs = addr;
+        v->syms[i].sym.sz = sz;
+    }
 }
 
 uintptr_t FindSymbol(kh_mapsymbols_t *mapsymbols, const char* name, int ver, const char* vername, int local, const char* defver)
@@ -217,8 +230,8 @@ int GetSymbolStartEnd(kh_mapsymbols_t* mapsymbols, const char* name, uintptr_t* 
     versymbols_t * v = &kh_val(mapsymbols, k);
     versymbol_t* s = MatchVersion(v, ver, vername, 0, local, defver);
     if(s) {
-        *start = s->sym.offs;
-        *end = *start + s->sym.sz;
+        if(start) *start = s->sym.offs;
+        if(end) *end = *start + s->sym.sz;
         return 1;
     }
     return 0;
@@ -289,5 +302,6 @@ const char* GetDefaultVersion(kh_defaultversion_t* def, const char* symname)
     khint_t k = kh_get(defaultversion, def, symname);
     if(k==kh_end(def))
         return NULL;
-    return kh_value(def, k);
+    else
+        return kh_value(def, k);
 }

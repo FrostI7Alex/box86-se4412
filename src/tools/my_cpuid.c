@@ -11,7 +11,15 @@
 int get_cpuMhz()
 {
 	int MHz = 0;
-#ifdef __arm__
+	#ifdef PANDORA
+	FILE *f = fopen("//proc/pandora/cpu_mhz_max", "r");
+        if(f) {
+                int r;
+                if(1==fscanf(f, "%d", &r))
+                        MHz = r;
+                fclose(f);
+        }
+	#else
 	FILE *f = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
 	if(f) {
 		int r;
@@ -19,22 +27,175 @@ int get_cpuMhz()
 			MHz = r/1000;
 		fclose(f);
 	}
-#endif
+    if(!MHz) {
+        // try with lscpu, grabbing the max frequency
+        FILE* f = popen("lscpu | grep \"CPU max MHz:\" | sed -r 's/CPU max MHz:\\s{1,}//g'", "r");
+        if(f) {
+            char tmp[200] = "";
+            ssize_t s = fread(tmp, 1, 200, f);
+            pclose(f);
+            if(s>0) {
+                // worked! (unless it's saying "lscpu: command not found" or something like that)
+                if(!strstr(tmp, "lscpu")) {
+                    // trim ending
+                    while(strlen(tmp) && tmp[strlen(tmp)-1]=='\n')
+                        tmp[strlen(tmp)-1] = 0;
+                    // incase multiple cpu type are present, there will be multiple lines
+                    while(strchr(tmp, '\n'))
+                        *strchr(tmp,'\n') = ' ';
+                    // cut the float part (so '.' or ','), it's not needed
+                    if(strchr(tmp, '.'))
+                        *strchr(tmp, '.')= '\0';
+                    if(strchr(tmp, ','))
+                        *strchr(tmp, ',')= '\0';
+                    int mhz;
+                    if(sscanf(tmp, "%d", &mhz)==1)
+                        MHz = mhz;
+                }
+            }
+        }
+    }
+	#endif
 	if(!MHz)
 		MHz = 1000; // default to 1Ghz...
 	return MHz;
 }
-int getNCpu();  // defined in wrappedlibc.c
+static int nCPU = 0;
+static double bogoMips = 100.;
+
+void grabNCpu() {
+    nCPU = 1;  // default number of CPU to 1
+    FILE *f = fopen("/proc/cpuinfo", "r");
+    size_t dummy;
+    if(f) {
+        nCPU = 0;
+        int bogo = 0;
+        size_t len = 500;
+        char* line = malloc(len);
+        while ((dummy = getline(&line, &len, f)) != -1) {
+            if(!strncmp(line, "processor\t", strlen("processor\t")))
+                ++nCPU;
+            if(!bogo && !strncmp(line, "BogoMIPS\t", strlen("BogoMIPS\t"))) {
+                // grab 1st BogoMIPS
+                float tmp;
+                if(sscanf(line, "BogoMIPS\t: %g", &tmp)==1) {
+                    bogoMips = tmp;
+                    bogo = 1;
+                }
+            }
+        }
+        free(line);
+        fclose(f);
+        if(!nCPU) nCPU=1;
+    }
+}
+int getNCpu()
+{
+    if(!nCPU)
+        grabNCpu();
+    if(box86_wine && nCPU>32)
+        return 32;
+    return nCPU;
+}
+
+double getBogoMips()
+{
+    if(!nCPU)
+        grabNCpu();
+    return bogoMips;
+}
+
+const char* getCpuName()
+{
+    static char name[200] = "Unknown CPU";
+    static int done = 0;
+    if(done)
+        return name;
+    done = 1;
+    #ifdef PANDORA
+    strcpy(name, "Cortex-A8");
+    #else
+    FILE* f = popen("lscpu | grep \"Model name:\" | sed -r 's/Model name:\\s{1,}//g'", "r");
+    if(f) {
+        char tmp[200] = "";
+        ssize_t s = fread(tmp, 1, 200, f);
+        pclose(f);
+        if(s>0) {
+            // worked! (unless it's saying "lscpu: command not found" or something like that)
+            if(!strstr(tmp, "lscpu")) {
+                // trim ending
+                while(strlen(tmp) && tmp[strlen(tmp)-1]=='\n')
+                    tmp[strlen(tmp)-1] = 0;
+                // incase multiple cpu type are present, there will be multiple lines
+                while(strchr(tmp, '\n'))
+                    *strchr(tmp,'\n') = ' ';
+                strncpy(name, tmp, 199);
+            }
+            return name;
+        }
+    }
+    // failled, try to get architecture at least
+    f = popen("lscpu | grep \"Architecture:\" | sed -r 's/Architecture:\\s{1,}//g'", "r");
+    if(f) {
+        char tmp[200] = "";
+        ssize_t s = fread(tmp, 1, 200, f);
+        pclose(f);
+        if(s>0) {
+            // worked!
+            // trim ending
+            while(strlen(tmp) && tmp[strlen(tmp)-1]=='\n')
+                tmp[strlen(tmp)-1] = 0;
+            // incase multiple cpu type are present, there will be multiple lines
+            while(strchr(tmp, '\n'))
+                *strchr(tmp,'\n') = ' ';
+            snprintf(name, 199, "unknown %.*s cpu", 186, tmp);
+            return name;
+        }
+    }
+    #endif
+    // Nope, bye
+    return name;
+}
+
+const char* getBoxCpuName()
+{
+    static char branding[3*4*4+1] = {0};
+    static int done = 0;
+    if(!done) {
+        done = 1;
+        const char* name = getCpuName();
+        if(strstr(name, "MHz") || strstr(name, "GHz")) {
+            // name already have the speed in it
+            snprintf(branding, sizeof(branding), "Box86 on %.*s", 39, name);
+        } else {
+            unsigned int MHz = get_cpuMhz();
+            if(MHz>1500) { // swiches to GHz display...
+                snprintf(branding, sizeof(branding), "Box86 on %.*s @%1.2f GHz", 28, name, MHz/1000.);
+            } else {
+                snprintf(branding, sizeof(branding), "Box86 on %.*s @%04d MHz", 28, name, MHz);
+            }
+        }
+    }
+    return branding;
+}
 
 void my_cpuid(x86emu_t* emu, uint32_t tmp32u)
 {
     int ncpu = getNCpu();
     if(ncpu>255) ncpu = 255;
     if(!ncpu) ncpu = 1;
+    char branding[3*4*4+1] = {0};
+    if(!branding[0]) {
+        strcpy(branding, getBoxCpuName());
+        while(strlen(branding)<3*4*4) {
+            memmove(branding+1, branding, strlen(branding)+1);
+            branding[0] = ' ';
+        }
+    }
     switch(tmp32u) {
         case 0x0:
             // emulate a P4
-            R_EAX = 0x0000000D;//0x80000004;
+            R_EAX = 0x0000000F;//0x80000004;
             // return GenuineIntel
             R_EBX = 0x756E6547;
             R_EDX = 0x49656E69;
@@ -42,13 +203,15 @@ void my_cpuid(x86emu_t* emu, uint32_t tmp32u)
             break;
         case 0x1:
             R_EAX = 0x00000601; // familly and all
-            R_EBX = 0 | (8<<0x8) | (ncpu<<16);          // Brand index, CLFlush (8), Max APIC ID (16-23), Local APIC ID (24-31)
-            {
+            R_EBX = 0 | (8<<0x8) | (/*ncpu*/1<<16);          // Brand index, CLFlush (8), Max APIC ID (16-23), Local APIC ID (24-31)
+            /*{
                 int cpu = sched_getcpu();
                 if(cpu<0) cpu=0;
                 R_EAX |= cpu<<24;
-            }
+            }*/
             R_EDX =   1         // fpu 
+                    | 1<<2      // debugging extension (checked by Burnout Paradise
+                    | 1<<3      // Large Page Extension
                     | 1<<4      // rdtsc
                     | 1<<8      // cmpxchg8
                     | 1<<11     // sep (sysenter & sysexit)
@@ -61,10 +224,15 @@ void my_cpuid(x86emu_t* emu, uint32_t tmp32u)
                     | 1<<28     // HT / Multi-core
                     ;
             R_ECX =   1<<0      // SSE3
+                    | 1<<1      // PCLMULQDQ
                     | 1<<9      // SSSE3
                     | 1<<12     // fma
                     | 1<<13     // cx16 (cmpxchg16)
+                    | 1<<19     // SSE4_1
+                    | 1<<20     // SSE4_2
                     | 1<<22     // MOVBE
+                    | 1<<23     // POPCOUNT
+                    | 1<<25     // aesni
                     ; 
             break;
         case 0x2:   // TLB and Cache info. Sending 1st gen P4 info...
@@ -143,6 +311,25 @@ void my_cpuid(x86emu_t* emu, uint32_t tmp32u)
                 R_EAX = R_ECX = R_EBX = R_EDX = 0;
             }
             break;
+        case 0xE:   //?
+            R_EAX = 0;
+            break;
+        case 0xF:   //L3 Cache
+            switch(R_ECX) {
+                case 0: 
+                    R_EAX = 0;
+                    R_EBX = 0; // maximum range of RMID of physical processor
+                    R_ECX = 0;
+                    R_EDX = 0;  // bit 1 support L3 RDT Cache monitoring
+                    break;
+                case 1:
+                    R_EAX = 0;
+                    R_EBX = 0;  // Conversion factor
+                    R_EDX = 0;  // bit 0 = occupency monitoring
+                    break;
+                default: R_EAX = 0;
+            }
+            break;
             
         case 0x80000000:        // max extended
             R_EAX = 0x80000005;
@@ -153,37 +340,23 @@ void my_cpuid(x86emu_t* emu, uint32_t tmp32u)
             R_ECX = (1<<5) | (1<<8); // LZCNT | PREFETCHW
             R_EDX = 0;
             break;
-        case 0x80000002:    // Brand part 1 (P4 signature)
-            R_EAX = 0x20202020;
-            R_EBX = 0x20202020;
-            R_ECX = 0x20202020;
-            R_EDX = 0x6E492020;
+        case 0x80000002:    // Brand part 1 (branding signature)
+            R_EAX = ((uint32_t*)branding)[0];
+            R_EBX = ((uint32_t*)branding)[1];
+            R_ECX = ((uint32_t*)branding)[2];
+            R_EDX = ((uint32_t*)branding)[3];
             break;
         case 0x80000003:    // Brand part 2
-            R_EAX = 0x286C6574;
-            R_EBX = 0x50202952;
-            R_ECX = 0x69746E65;
-            R_EDX = 0x52286D75;
+            R_EAX = ((uint32_t*)branding)[4];
+            R_EBX = ((uint32_t*)branding)[5];
+            R_ECX = ((uint32_t*)branding)[6];
+            R_EDX = ((uint32_t*)branding)[7];
             break;
         case 0x80000004:    // Brand part 3, with frequency
-            R_EAX = 0x20342029;
-            R_EBX = 0x20555043;
-            {
-                static int MHz = 0;
-                if(!MHz)
-					MHz = get_cpuMhz();
-                if(MHz>15000) { // swiches to GHz display...
-                    char tmp[12];
-                    sprintf(tmp, "%1.2f", MHz/1000.);
-                    R_ECX = *(uint32_t*)tmp;
-                    R_EDX = 0x007A4847; // GHz
-                } else {
-                    char tmp[12];
-                    sprintf(tmp, "%04d", MHz);
-                    R_ECX = *(uint32_t*)tmp;
-                    R_EDX = 0x007A484D; // MHz
-                }
-            }
+            R_EAX = ((uint32_t*)branding)[8];
+            R_EBX = ((uint32_t*)branding)[9];
+            R_ECX = ((uint32_t*)branding)[10];
+            R_EDX = ((uint32_t*)branding)[11];
             break;  
         case 0x80000005:
             R_EAX = 0;

@@ -1,5 +1,6 @@
-// build with  gcc -march=corei7 -O2 -g -msse -msse2 test17.c -o test17
+// build with  gcc -O0 -g -msse -msse2 -mssse3 -msse4.1 test17.c -o test17
 // and -m32 for 32bits version
+#include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -141,7 +142,7 @@ void print_32(v128 v) {
 }
 void print_64(v128 v) {
     for(int i=0; i<2; ++i)
-        printf("0x%llx ", v.u64[i]);
+        printf("0x%"PRIx64" ", v.u64[i]);
 }
 #define print_128 print_64
 void print_ps(v128 v) {
@@ -151,33 +152,19 @@ void print_ps(v128 v) {
         else
             printf("%g ", v.f32[i]);
 }
-void print_ps_approx(v128 v) {
-    for(int i=0; i<4; ++i)
-        if(isnanf(v.f32[i]))
-            printf("nan ");
-        else
-            printf("%.2g ", v.f32[i]);
-}
 void print_pd(v128 v) {
     for(int i=0; i<2; ++i)
         if(isnan(v.d64[i]))
-            printf("0x%llx ", v.u64[i]);
+            printf("0x%"PRIx64" ", v.u64[i]);
         else
             printf("%g ", v.d64[i]);
-}
-void print_pd_approx(v128 v) {
-    for(int i=0; i<2; ++i)
-        if(isnan(v.d64[i]))
-            printf("0x%llx ", v.u64[i]);
-        else
-            printf("%.4g ", v.d64[i]);
 }
 #define print_sd print_pd
 
 int main(int argc, const char** argv)
 {
  float a, b;
- uint64_t flags;
+ uint32_t flags;
  uint32_t maxf = 0x7f7fffff;
  uint32_t minf = 0xff7fffff;
  uint32_t r;
@@ -185,40 +172,40 @@ int main(int argc, const char** argv)
 #define GO1(A, N)                                   \
 a = 1.0f; b = 2.0f;                                 \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 flags = A(b, a);                                    \
-printf(N " %f, %f => 0x%lx\n", b, a, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", b, a, flags);  \
 b = INFINITY;                                       \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 flags = A(b, a);                                    \
-printf(N " %f, %f => 0x%lx\n", b, a, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", b, a, flags);  \
 b = -INFINITY;                                      \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 flags = A(b, a);                                    \
-printf(N " %f, %f => 0x%lx\n", b, a, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", b, a, flags);  \
 b = NAN;                                            \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 flags = A(b, a);                                    \
-printf(N " %f, %f => 0x%lx\n", b, a, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", b, a, flags);  \
 b = a;                                              \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 flags = A(b, a);                                    \
-printf(N " %f, %f => 0x%lx\n", b, a, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", b, a, flags);  \
 a = b = INFINITY;                                   \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 a = -INFINITY;                                      \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);  \
 flags = A(b, a);                                    \
-printf(N " %f, %f => 0x%lx\n", b, a, flags);        \
+printf(N " %f, %f => 0x%"PRIx32"\n", b, a, flags);  \
 a = b = NAN;                                        \
 flags = A(a, b);                                    \
-printf(N " %f, %f => 0x%lx\n", a, b, flags);
+printf(N " %f, %f => 0x%"PRIx32"\n", a, b, flags);
 
 #define GO2(A, N)                               \
 a = 1.0f; b = 2.0f;                             \
@@ -321,10 +308,6 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  a128.md = _mm_##A##_pd(A1.md);                     \
  printf("%s(", #C); print_pd(A1);                   \
  printf(") = "); print_pd(a128); printf("\n");
- #define GO1pda(A, C, A1)                           \
- a128.md = _mm_##A##_pd(A1.md);                     \
- printf("%s(", #C); print_pd(A1);                   \
- printf(") = "); print_pd_approx(a128); printf("\n");
  #define GO2pd(A, C, A1, A2)                        \
  a128.md = _mm_##A##_pd(A1.md, A2.md);              \
  printf("%s(", #C); print_pd(A1);                   \
@@ -343,10 +326,6 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  a128.md = _mm_##A##_sd(A1.md);                     \
  printf("%s(", #C); print_sd(A1);                   \
  printf(") = "); print_sd(a128); printf("\n");
- #define GO1sda(A, C, A1)                           \
- a128.md = _mm_##A##_sd(A1.md);                     \
- printf("%s(", #C); print_sd(A1);                   \
- printf(") = "); print_sd_approx(a128); printf("\n");
  #define GO2sd(A, C, A1, A2)                        \
  a128.md = _mm_##A##_sd(A1.md, A2.md);              \
  printf("%s(", #C); print_sd(A1);                   \
@@ -365,10 +344,6 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  a128.mf = _mm_##A##_ps(A1.mf);                     \
  printf("%s(", #C); print_ps(A1);                   \
  printf(") = "); print_ps(a128); printf("\n");
- #define GO1psa(A, C, A1)                           \
- a128.mf = _mm_##A##_ps(A1.mf);                     \
- printf("%s(", #C); print_ps(A1);                   \
- printf(") = "); print_ps_approx(a128); printf("\n");
  #define GO2ps(A, C, A1, A2)                        \
  a128.mf = _mm_##A##_ps(A1.mf, A2.mf);              \
  printf("%s(", #C); print_ps(A1);                   \
@@ -379,6 +354,10 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  printf("%s(", #C); print_ps(A1);                   \
  printf(", "); print_ps(A2);                        \
  printf(", %d) = ", I); print_ps(a128); printf("\n");
+ #define GO1ps2dq(A, C, A1)                         \
+ a128.mm = _mm_##A##_epi32(A1.mf);                  \
+ printf("%s(", #C); print_ps(A1);                   \
+ printf(") = "); print_32(a128); printf("\n");
  
  #define MULITGO2pd(A, B)       \
  GO2pd(A, B, a128_pd, b128_pd)  \
@@ -403,6 +382,12 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  GO2ps(A, B, b128_ps, d128_ps)  \
  GO2ps(A, B, c128_ps, d128_ps)  \
  GO2ps(A, B, d128_ps, d128_ps)
+
+ #define MULTIGO1ps2dq(A, B)    \
+ GO1ps2dq(A, B, a128_ps)        \
+ GO1ps2dq(A, B, b128_ps)        \
+ GO1ps2dq(A, B, c128_ps)        \
+ GO1ps2dq(A, B, d128_ps)
 
  #define MULITGO2Cps(A, B, I)       \
  GO2Cps(A, B, a128_ps, b128_ps, I)  \
@@ -473,14 +458,6 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  GO1pd(sqrt, psqrtpd, b128_pd)
  GO1pd(sqrt, psqrtpd, c128_pd)
  GO1pd(sqrt, psqrtpd, d128_pd)
- //GO1pda(rsqrt, prsqrtps, a128_pd)
- //GO1pda(rsqrt, prsqrtps, b128_pd)
- //GO1pda(rsqrt, prsqrtps, c128_pd)
- //GO1pda(rsqrt, prsqrtps, d128_pd)
- //GO1pda(rcp, prcpps, a128_pd)
- //GO1pda(rcp, prcpps, b128_pd)
- //GO1pda(rcp, prcpps, c128_pd)
- //GO1psa(rcp, prcpps, d128_pd)
  MULITGO2pd(and, andpd)
  MULITGO2pd(andnot, andnpd)
  MULITGO2pd(or, orpd)
@@ -593,14 +570,14 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  GO1ps(sqrt, psqrtps, b128_ps)
  GO1ps(sqrt, psqrtps, c128_ps)
  GO1ps(sqrt, psqrtps, d128_ps)
- GO1psa(rsqrt, prsqrtps, a128_ps)
- GO1psa(rsqrt, prsqrtps, b128_ps)
- GO1psa(rsqrt, prsqrtps, c128_ps)
- GO1psa(rsqrt, prsqrtps, d128_ps)
- GO1psa(rcp, prcpps, a128_ps)
- GO1psa(rcp, prcpps, b128_ps)
- GO1psa(rcp, prcpps, c128_ps)
- GO1psa(rcp, prcpps, d128_ps)
+ //GO1ps(rsqrt, prsqrtps, a128_ps)  // difference in precision
+ //GO1ps(rsqrt, prsqrtps, b128_ps)  // same
+ //GO1ps(rsqrt, prsqrtps, c128_ps)  // same
+ //GO1ps(rsqrt, prsqrtps, d128_ps)  // difference in the handling of NAN, (-)0, and INF in Dynarec
+ //GO1ps(rcp, prcpps, a128_ps)      // deference in precision
+ //GO1ps(rcp, prcpps, b128_ps)      // deference in precision
+ //GO1ps(rcp, prcpps, c128_ps)      // deference in precision
+ GO1ps(rcp, prcpps, d128_ps)
  MULITGO2ps(and, andps)
  MULITGO2ps(andnot, andnps)
  MULITGO2ps(or, orps)
@@ -611,7 +588,7 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  MULITGO2ps(min, minps)
  MULITGO2ps(div, divps)
  MULITGO2ps(max, maxps)
-// MULITGO2Cps(cmp, cmpps, 0)   // use avx for some reason
+ //MULITGO2Cps(cmp, cmpps, 0)   // use avx for some reason
  MULITGO2Cps(shuffle, shufps, 0)
  MULITGO2Cps(shuffle, shufps, 0x15)
  MULITGO2Cps(shuffle, shufps, 0xff)
@@ -623,6 +600,12 @@ printf(N " %g, %g => %g\n", b, a, *(float*)&r);
  MULTIGO2sd(min, minsd)
  MULTIGO2sd(div, divsd)
  MULTIGO2sd(max, maxsd)
+ MULTIGO1ps2dq(cvtps, cvtps2dq)
+ MULITGO2Cps(dp, dpps, 0xff)
+ MULITGO2Cps(dp, dpps, 0x3f)
+ MULITGO2Cps(dp, dpps, 0xf3)
+ MULITGO2Cps(dp, dpps, 0x53)
 
  return 0;
 }
+

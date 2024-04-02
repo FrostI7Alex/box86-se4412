@@ -34,10 +34,10 @@ GO(4)
 
 // SSLBadCertHandler ...
 #define GO(A)   \
-static uintptr_t my_SSLBadCertHandler_fct_##A = 0;                          \
-static int my_SSLBadCertHandler_##A(void* a, void* b)                       \
-{                                                                           \
-    return RunFunction(my_context, my_SSLBadCertHandler_fct_##A, 2, a, b);  \
+static uintptr_t my_SSLBadCertHandler_fct_##A = 0;                              \
+static int my_SSLBadCertHandler_##A(void* a, void* b)                           \
+{                                                                               \
+    return RunFunctionFmt(my_SSLBadCertHandler_fct_##A, "pp", a, b);\
 }
 SUPER()
 #undef GO
@@ -57,10 +57,10 @@ static void* find_SSLBadCertHandler_Fct(void* fct)
 
 // SSLAuthCertificate ...
 #define GO(A)   \
-static uintptr_t my_SSLAuthCertificate_fct_##A = 0;                                 \
-static int my_SSLAuthCertificate_##A(void* a, void* b, int c, int d)                \
-{                                                                                   \
-    return RunFunction(my_context, my_SSLAuthCertificate_fct_##A, 4, a, b, c, d);   \
+static uintptr_t my_SSLAuthCertificate_fct_##A = 0;                                         \
+static int my_SSLAuthCertificate_##A(void* a, void* b, int c, int d)                        \
+{                                                                                           \
+    return RunFunctionFmt(my_SSLAuthCertificate_fct_##A, "ppii", a, b, c, d);   \
 }
 SUPER()
 #undef GO
@@ -82,12 +82,14 @@ static void* find_SSLAuthCertificate_Fct(void* fct)
 
 EXPORT int my_SSL_BadCertHook(x86emu_t* emu, void* fd, void* f, void* arg)
 {
+    (void)emu;
     return my->SSL_BadCertHook(fd, find_SSLBadCertHandler_Fct(f), arg);
 }
 
 EXPORT int my_SSL_AuthCertificateHook(x86emu_t* emu, void* fd, void* f, void* arg)
 {
-    return my->SSL_AuthCertificateHook(fd, find_SSLBadCertHandler_Fct(f), arg);
+    (void)emu;
+    return my->SSL_AuthCertificateHook(fd, find_SSLAuthCertificate_Fct(f), arg);
 }
 
 #define CUSTOM_INIT \
@@ -97,4 +99,3 @@ EXPORT int my_SSL_AuthCertificateHook(x86emu_t* emu, void* fd, void* f, void* ar
     freeMy();
 
 #include "wrappedlib_init.h"
-

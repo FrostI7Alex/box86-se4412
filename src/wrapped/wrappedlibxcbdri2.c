@@ -17,7 +17,12 @@
 #include "box86context.h"
 #include "emu/x86emu_private.h"
 
-const char* libxcbdri2Name = "libxcb-dri2.so.0";
+#ifdef ANDROID
+    const char* libxcbdri2Name = "libxcb-dri2.so";
+#else
+    const char* libxcbdri2Name = "libxcb-dri2.so.0";
+#endif
+
 #define LIBNAME libxcbdri2
 
 typedef struct my_xcb_cookie_s {
@@ -35,11 +40,12 @@ typedef my_xcb_cookie_t (*XFpuup_t)(void*, uint32_t, uint32_t, void*);
 
 #include "wrappercallback.h"
 
-#define SUPER(F, P, ...)                        \
-    EXPORT void* my_##F P                       \
-    {                                           \
-        *ret = my->F(__VA_ARGS__);              \
-        return ret;                             \
+#define SUPER(F, P, ...)           \
+    EXPORT void* my_##F P          \
+    {                              \
+        (void)emu;                 \
+        *ret = my->F(__VA_ARGS__); \
+        return ret;                \
     }
 
 SUPER(xcb_dri2_authenticate, (x86emu_t* emu, my_xcb_cookie_t* ret, void* c, uint32_t win, uint32_t magic), c, win, magic)

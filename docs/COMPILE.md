@@ -6,7 +6,7 @@ You can use [@Itai-Nelken](https://github.com/Itai-Nelken)'s apt repository to i
 
 ```
 sudo wget https://itai-nelken.github.io/weekly-box86-debs/debian/box86.list -O /etc/apt/sources.list.d/box86.list
-wget -qO- https://itai-nelken.github.io/weekly-box86-debs/debian/KEY.gpg | sudo apt-key add -
+wget -qO- https://itai-nelken.github.io/weekly-box86-debs/debian/KEY.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/box86-debs-archive-keyring.gpg
 sudo apt update && sudo apt install box86 -y
 ```
 
@@ -54,7 +54,7 @@ _Build box86:armhf on RPiOS 64-bit ARM (aarch64)_
 sudo apt install gcc-arm-linux-gnueabihf # building 32-bit ARM code on aarch64 requires this armhf gcc cross-compiler toolchain 
 git clone https://github.com/ptitSeb/box86
 cd box86
-mkdir build; cd build; cmake .. -DRPI4ARM64=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo # -DRPI4ARM64=1 for Pi4 aarch64 (use `-DRPI2ARM64=1` etc for other models)
+mkdir build; cd build; cmake .. -DRPI4ARM64=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo # -DRPI4ARM64=1 for Pi4 aarch64 (use `-DRPI3ARM64=1` for a PI3 model)
 make -j2
 sudo make install
 sudo systemctl restart systemd-binfmt
@@ -72,6 +72,22 @@ As most RK3399 devices run an AARCH64 OS, you'll need an `armhf` multiarch envir
 
 Also, on armbian, you may need to install `libc6-dev-armhf-cross` or you may have an issue with `crt1.o` and a few other files not included with box86.
 
+#### for RK3588 / RK3588S
+
+`mkdir build; cd build; cmake .. -DRK3588=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j4`
+
+As most RK3588 devices run an AARCH64 OS, you'll need an `armhf` multiarch environment, and an armhf gcc: On debian, install it with `sudo apt install gcc-arm-linux-gnueabihf`. 
+
+Also, on armbian, you may need to install `libc6-dev-armhf-cross` or you may have an issue with `crt1.o` and a few other files not included with box86.
+
+#### for ODROID N2/N2+
+
+`mkdir build; cd build; cmake .. -DODROIDN2=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j3`
+
+As most ODROID N2/N2+ devices run an AARCH64 OS, you'll need an `armhf` multiarch environment, and an armhf gcc: On debian, install it with `sudo apt install gcc-arm-linux-gnueabihf`. 
+
+Also, on armbian, you may need to install `libc6-dev-armhf-cross` or you may have an issue with `crt1.o` and a few other files not included with box86.
+
 #### for Tinker Board (1/1S) or RK3288
 
 `mkdir build; cd build; cmake .. -DRK3288=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j3`
@@ -84,11 +100,13 @@ As most Allwinner A64 devices run an AARCH64 OS, you'll need an `armhf` multiarc
 
 Also, on armbian, you may need to install `libc6-dev-armhf-cross` or you may have an issue with `crt1.o` and a few other files not included with box86.
 
-#### for Snapdragon 845
+#### for Snapdragon
 
 `mkdir build; cd build; cmake .. -DSD845=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j4`
+or
+`mkdir build; cd build; cmake .. -DSD888=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j4`
 
-As most Snapdragon 845 devices run an AARCH64 OS, you'll need an `armhf` multiarch environment, and an armhf gcc: On mobian, install it with `sudo apt install gcc-arm-linux-gnueabihf`.
+Depending how old/recent you SD is. As most Snapdragon devices run an AARCH64 OS, you'll need an `armhf` multiarch environment, and an armhf gcc: On mobian, install it with `sudo apt install gcc-arm-linux-gnueabihf`.
 
 #### for Phytium
 
@@ -96,11 +114,30 @@ As most Snapdragon 845 devices run an AARCH64 OS, you'll need an `armhf` multiar
 
 As most Phytium (D2000 or FT2000/4) devices run an AARCH64 OS, you'll need an `armhf` multiarch environment, and an armhf gcc: On debian, install it with `sudo apt install gcc-arm-linux-gnueabihf`. 
 
+
+Also, on armbian, you may need to install `libc6-dev-armhf-cross` or you may have an issue with `crt1.o` and a few other files not included with box86.
+
+#### for ADLink AmpereAltra
+
+`mkdir build; cd build; cmake .. -DADLINK=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j`
+
+As ADLINK AmpereAltra computers run an AARCH64 OS, you'll need an `armhf` multiarch environment, and an armhf gcc: On debian, install it with `sudo apt install gcc-arm-linux-gnueabihf`. 
+
+#### for Other ARM64 64bits Linux platform
+
+`mkdir build; cd build; cmake .. -DARM64=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j3`
+
+You can also add `-DBAD_SIGNAL=ON` to the cmake command if you are on Linux Kernel mixed with Android, like on RK3588 or maybe Termux
+
+You'll need an `armhf` multiarch environment, and an armhf gcc: On debian, install it with `sudo apt install gcc-arm-linux-gnueabihf`. 
+
 Also, on armbian, you may need to install `libc6-dev-armhf-cross` or you may have an issue with `crt1.o` and a few other files not included with box86.
 
 #### for Other ARM Linux platforms
 
  `mkdir build; cd build; cmake .. -DARM_DYNAREC=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo; make -j3`
+
+You can also add `-DBAD_SIGNAL=ON` to the cmake command if you are on Linux Kernel mixed with Android, like on RK3588 or maybe Termux
 
 #### for x86 Linux
 
@@ -127,6 +164,7 @@ To have a trace enabled build (***the interpreter will be slightly slower***), a
 #### to have ARM Dynarec
 
 ###### *Note: VFPv3 and NEON are required for Dynarec.*
+###### You might need to `sudo apt install neon-support` package for CMAKE to correctly detect them.
 
 ###### *Note: Compiling with `ARM_DYNAREC` without selecting a hardware profile is not advised.*
 
@@ -165,5 +203,5 @@ NVIDIA doesn't provide armhf libraries for their GPU drivers at this time. There
 
 Debian Packaging
 ----
-Box86 can also be packaged into a .deb file with `DEB_BUILD_OPTIONS=nostrip dpkg-buildpackage -us -uc -nc`.
+Box86 can also be packaged into a .deb file ***using the source code zip from the releases page*** with `DEB_BUILD_OPTIONS=nostrip dpkg-buildpackage -us -uc -nc`. Configure any additional cmake options you might want in `debian/rules`.
 

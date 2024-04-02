@@ -34,6 +34,8 @@ ENTRYBOOL(BOX86_SHOWBT, box86_showbt)                   \
 ENTRYBOOL(BOX86_X11THREADS, box86_x11threads)           \
 ENTRYBOOL(BOX86_X11GLX, box86_x11glx)                   \
 ENTRYDSTRING(BOX86_LIBGL, box86_libGL)                  \
+ENTRYBOOL(BOX86_SSE_FLUSHTO0, box86_sse_flushto0)       \
+ENTRYBOOL(BOX86_X87_NO80BITS, box86_x87_no80bits)       \
 ENTRYSTRING_(BOX86_EMULATED_LIBS, emulated_libs)        \
 ENTRYBOOL(BOX86_ALLOWMISSINGLIBS, allow_missing_libs)   \
 ENTRYBOOL(BOX86_ALLOWMISSING_SYMBOLS, allow_missing_symbols)    \
@@ -42,10 +44,17 @@ ENTRYBOOL(BOX86_PREFER_EMULATED, box86_prefer_emulated) \
 ENTRYBOOL(BOX86_NOPULSE, box86_nopulse)                 \
 ENTRYBOOL(BOX86_NOGTK, box86_nogtk)                     \
 ENTRYBOOL(BOX86_NOVULKAN, box86_novulkan)               \
+ENTRYBOOL(BOX86_FUTEX_WAITV, box86_futex_waitv)         \
 ENTRYBOOL(BOX86_FIX_64BIT_INODES, fix_64bit_inodes)     \
 ENTRYSTRING_(BOX86_BASH, bash)                          \
-ENTRYINT(BOX86_JITGDB, jit_gdb, 0, 2, 2)                \
+ENTRYINT(BOX86_JITGDB, jit_gdb, 0, 3, 2)                \
 ENTRYSTRING_(BOX86_BOX64, box64)                        \
+ENTRYSTRING_(BOX86_LD_PRELOAD, ld_preload)              \
+ENTRYBOOL(BOX86_NOSANDBOX, box86_nosandbox)             \
+ENTRYBOOL(BOX86_LIBCEF, box86_libcef)                   \
+ENTRYBOOL(BOX86_SDL2_JGUID, box86_sdl2_jguid)           \
+ENTRYBOOL(BOX86_MUTEX_ALIGNED, box86_mutex_aligned)     \
+ENTRYINT(BOX86_MALLOC_HACK, box86_malloc_hack, 0, 2, 2) \
 
 #ifdef HAVE_TRACE
 #define SUPER2()                                        \
@@ -71,13 +80,22 @@ ENTRYBOOL(BOX86_DYNAREC, box86_dynarec)                             \
 ENTRYINT(BOX86_DYNAREC_DUMP, box86_dynarec_dump, 0, 2, 2)           \
 ENTRYINT(BOX86_DYNAREC_LOG, box86_dynarec_log, 0, 3, 2)             \
 ENTRYINT(BOX86_DYNAREC_BIGBLOCK, box86_dynarec_bigblock, 0, 3, 2)   \
-ENTRYINT(BOX86_DYNAREC_STRONGMEM, box86_dynarec_strongmem, 0, 2, 2) \
+ENTRYSTRING_(BOX86_DYNAREC_FORWARD, box86_dynarec_forward)          \
+ENTRYINT(BOX86_DYNAREC_STRONGMEM, box86_dynarec_strongmem, 0, 3, 2) \
 ENTRYBOOL(BOX86_DYNAREC_X87DOUBLE, box86_dynarec_x87double)         \
 ENTRYBOOL(BOX86_DYNAREC_FASTNAN, box86_dynarec_fastnan)             \
+ENTRYBOOL(BOX86_DYNAREC_FASTROUND, box86_dynarec_fastround)         \
 ENTRYINT(BOX86_DYNAREC_SAFEFLAGS, box86_dynarec_safeflags, 0, 2, 2) \
-ENTRYINT(BOX86_DYNAREC_HOTPAGE, box86_dynarec_hotpage, 0, 255, 8)   \
+ENTRYBOOL(BOX86_DYNAREC_CALLRET, box86_dynarec_callret)             \
+IGNORE(BOX86_DYNAREC_HOTPAGE)                                       \
+IGNORE(BOX86_DYNAREC_FASTPAGE)                                      \
+ENTRYBOOL(BOX86_DYNAREC_WAIT, box86_dynarec_wait)                   \
 ENTRYBOOL(BOX86_DYNAREC_BLEEDING_EDGE, box86_dynarec_bleeding_edge) \
+ENTRYBOOL(BOX86_DYNAREC_JVM, box86_dynarec_jvm)                     \
+ENTRYBOOL(BOX86_DYNAREC_TBB, box86_dynarec_tbb)                     \
 ENTRYSTRING_(BOX86_NODYNAREC, box86_nodynarec)                      \
+ENTRYBOOL(BOX86_DYNAREC_TEST, box86_dynarec_test)                   \
+ENTRYBOOL(BOX86_DYNAREC_MISSING, box86_dynarec_missing)             \
 
 #else
 #define SUPER3()                                                    \
@@ -85,13 +103,22 @@ IGNORE(BOX86_DYNAREC)                                               \
 IGNORE(BOX86_DYNAREC_DUMP)                                          \
 IGNORE(BOX86_DYNAREC_LOG)                                           \
 IGNORE(BOX86_DYNAREC_BIGBLOCK)                                      \
+IGNORE(BOX86_DYNAREC_FORWARD)                                       \
 IGNORE(BOX86_DYNAREC_STRONGMEM)                                     \
 IGNORE(BOX86_DYNAREC_X87DOUBLE)                                     \
 IGNORE(BOX86_DYNAREC_FASTNAN)                                       \
+IGNORE(BOX86_DYNAREC_FASTROUND)                                     \
 IGNORE(BOX86_DYNAREC_SAFEFLAGS)                                     \
+IGNORE(BOX64_DYNAREC_CALLRET)                                       \
 IGNORE(BOX86_DYNAREC_HOTPAGE)                                       \
+IGNORE(BOX86_DYNAREC_FASTPAGE)                                      \
+IGNORE(BOX86_DYNAREC_WAIT)                                          \
 IGNORE(BOX86_DYNAREC_BLEEDING_EDGE)                                 \
+IGNORE(BOX86_DYNAREC_JVM)                                           \
+IGNORE(BOX86_DYNAREC_TBB)                                           \
 IGNORE(BOX86_NODYNAREC)                                             \
+IGNORE(BOX86_DYNAREC_TEST)                                          \
+IGNORE(BOX86_DYNAREC_MISSING)                                       \
 
 #endif
 
@@ -337,6 +364,7 @@ void LoadRCFile(const char* filename)
     if(current_name)
         addParam(current_name, &current_param);
     free(line);
+    fclose(f);
     printf_log(LOG_INFO, "Params database has %d entries\n", kh_size(params));
 }
 
@@ -365,7 +393,7 @@ void GatherDynarecExtensions();
 void setupTraceInit();
 void setupTrace();
 #endif
-void ApplyParams(const char* name)
+void ApplyParams(const char* name, path_collection_t* preload)
 {
     if(!name || !params)
         return;
@@ -420,8 +448,8 @@ void ApplyParams(const char* name)
         if(ftrace_has_pid) {
             // open a new ftrace...
             fclose(ftrace);
-            openFTrace(param->trace_file);
         }
+        openFTrace(param->trace_file);
     }
     if(param->is_emulated_libs_present) {
         AppendList(&my_context->box86_emulated_libs, param->emulated_libs, 0);
@@ -439,6 +467,14 @@ void ApplyParams(const char* name)
         }
         my_context->box64path = strdup(param->box64);
         printf_log(LOG_INFO, "Applying %s=%s\n", "BOX86_BOX64", param->box64);
+    }
+    if(param->is_ld_preload_present) {
+        if(preload) {
+            printf_log(LOG_INFO, "Applying %s=%s\n", "BOX86_LD_PRELOAD", param->ld_preload);
+            PrependList(preload, param->ld_preload, 1);
+        } else {
+            printf_log(LOG_INFO, "Cannot Apply %s=%s\n", "BOX86_LD_PRELOAD", param->ld_preload);
+        }
     }
     #ifdef HAVE_TRACE
     int old_x86trace = my_context->x86trace;
@@ -475,8 +511,9 @@ void ApplyParams(const char* name)
         uintptr_t no_start = 0, no_end = 0;
         char* p;
         no_start = strtoul(param->box86_nodynarec, &p, 0);
-        if(p!=param->box86_nodynarec) {
+        if(p!=param->box86_nodynarec && p[0]=='-') {
             char* p2;
+            ++p;
             no_end = strtoul(p, &p2, 0);
             if(p2!=p && no_end>no_start) {
                 box86_nodynarec_start = no_start;
@@ -485,8 +522,20 @@ void ApplyParams(const char* name)
             }
         }
     }
+    if(param->is_box86_dynarec_forward_present) {
+        int forward = 0;
+        if(sscanf(param->box86_dynarec_forward, "%d", &forward)==1) {
+            box86_dynarec_forward = forward;
+            printf_log(LOG_INFO, "Appling BOX86_DYNAREC_FORWARD=%d\n", box86_dynarec_forward);
+        }
+    }
     if(!olddynarec && box86_dynarec)
         GatherDynarecExtensions();
+    if(param->is_box86_dynarec_test_present && box86_dynarec_test) {
+        box86_dynarec_fastnan = 0;
+        box86_dynarec_fastround = 0;
+        box86_dynarec_callret = 0;
+    }
     #endif
     if(box86_log==3) {
         box86_log = 2;

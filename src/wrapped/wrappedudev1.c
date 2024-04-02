@@ -39,7 +39,7 @@ GO(4)
 static uintptr_t my_log_fn_fct_##A = 0;                                                 \
 static void my_log_fn_##A(void* a, int b, void* c, int d, void* e, void* f, void* va)   \
 {                                                                                       \
-    RunFunction(my_context, my_log_fn_fct_##A, 7, a, b, c, d, e, f, va);                \
+    RunFunctionFmt(my_log_fn_fct_##A, "pipippp", a, b, c, d, e, f, va);     \
 }
 SUPER()
 #undef GO
@@ -61,6 +61,7 @@ static void* find_log_fn_Fct(void* fct)
 
 EXPORT void my_udev_set_log_fn(x86emu_t* emu, void* udev, void* f)
 {
+    (void)emu;
     my->udev_set_log_fn(udev, find_log_fn_Fct(f));
 }
 
@@ -71,4 +72,3 @@ EXPORT void my_udev_set_log_fn(x86emu_t* emu, void* udev, void* f)
     freeMy();
 
 #include "wrappedlib_init.h"
-

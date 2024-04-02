@@ -40,10 +40,10 @@ GO(4)
 
 // LDAP_SASL_INTERACT_PROC ...
 #define GO(A)   \
-static uintptr_t my_LDAP_SASL_INTERACT_PROC_fct_##A = 0;                                \
-static int my_LDAP_SASL_INTERACT_PROC_##A(void* a, unsigned b, void* c, void* d)        \
-{                                                                                       \
-    return RunFunction(my_context, my_LDAP_SASL_INTERACT_PROC_fct_##A, 4, a, b, c, d);  \
+static uintptr_t my_LDAP_SASL_INTERACT_PROC_fct_##A = 0;                                        \
+static int my_LDAP_SASL_INTERACT_PROC_##A(void* a, unsigned b, void* c, void* d)                \
+{                                                                                               \
+    return RunFunctionFmt(my_LDAP_SASL_INTERACT_PROC_fct_##A, "pupp", a, b, c, d);  \
 }
 SUPER()
 #undef GO
@@ -64,6 +64,7 @@ static void* find_LDAP_SASL_INTERACT_PROC_Fct(void* fct)
 
 EXPORT int my_ldap_sasl_interactive_bind_s(x86emu_t* emu, void* ld, void* dn, void* mechs, void* sctrls, void* cctrls, unsigned flags, void* f, void* defaults)
 {
+    (void)emu;
     return my->ldap_sasl_interactive_bind_s(ld, dn, mechs, sctrls, cctrls, flags, find_LDAP_SASL_INTERACT_PROC_Fct(f), defaults);
 }
 
@@ -81,4 +82,3 @@ EXPORT int my_ldap_sasl_interactive_bind_s(x86emu_t* emu, void* ld, void* dn, vo
     freeMy();
 
 #include "wrappedlib_init.h"
-

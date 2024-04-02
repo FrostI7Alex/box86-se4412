@@ -1,10 +1,6 @@
 #ifndef __ELFLOADER_PRIVATE_H_
 #define __ELFLOADER_PRIVATE_H_
 
-#ifdef DYNAREC
-typedef struct dynablocklist_s dynablocklist_t;
-#endif
-
 typedef struct library_s library_t;
 typedef struct needed_libs_s needed_libs_t;
 typedef struct kh_mapsymbols_s kh_mapsymbols_t;
@@ -12,24 +8,36 @@ typedef struct kh_mapsymbols_s kh_mapsymbols_t;
 #include <elf.h>
 #include "elfloader.h"
 
-struct elfheader_s {
+
+typedef struct multiblock_s {
+    void*       p;
+    uintptr_t   offs;
+    uintptr_t   paddr;
+    uintptr_t   align;
+    size_t      size;
+    size_t      asize;
+    uint8_t     flags;
+} multiblock_t;
+
+typedef struct elfheader_s {
     char*       name;
     char*       path;   // Resolved path to file
-    int         numPHEntries;
+    char*       soname; // soname of the elf
+    uint16_t    numPHEntries;
     Elf32_Phdr  *PHEntries;
-    int         numSHEntries;
+    uint16_t    numSHEntries;
     Elf32_Shdr  *SHEntries;
     int         SHIdx;
     int         numSST;
     char*       SHStrTab;
     char*       StrTab;
     Elf32_Sym*  SymTab;
-    int         numSymTab;
+    uint32_t    numSymTab;
     char*       DynStr;
     Elf32_Sym*  DynSym;
-    int         numDynSym;
+    uint32_t    numDynSym;
     Elf32_Dyn*  Dynamic;
-    int         numDynamic;
+    uint32_t    numDynamic;
     char*       DynStrTab;
     int         szDynStrTab;
     Elf32_Half* VerSym;
@@ -38,8 +46,12 @@ struct elfheader_s {
     Elf32_Verdef*   VerDef;
     int         szVerDef;
     int         e_type;
+    uint32_t    flags;
 
     intptr_t    delta;  // should be 0
+    void*       image;
+    void*       raw;    // raw pointer (might be unaligned vs image and max_align of elf)
+    size_t      raw_size;
 
     uintptr_t   entrypoint;
     uintptr_t   initentry;
@@ -70,37 +82,45 @@ struct elfheader_s {
     int         textsz;
     uintptr_t   bss;
     int         bsssz;
+    uintptr_t   ehframe;
+    uintptr_t   ehframe_end;
+    uintptr_t   ehframehdr;
 
     uintptr_t   paddr;
     uintptr_t   vaddr;
-    int         align;
+    uint32_t    align;
     uint32_t    memsz;
     uint32_t    reserve;
     uint32_t    stacksz;
-    int         stackalign;
+    uint32_t    stackalign;
     uintptr_t   tlsaddr;
     uint32_t    tlssize;
     uint32_t    tlsfilesize;
-    int         tlsalign;
+    uint32_t    tlsalign;
 
     int32_t     tlsbase;    // the base of the tlsdata in the global tlsdata (always negative)
 
     int         init_done;
     int         fini_done;
+    int         refcnt;     // ref count for the elf
+    int         malloc_hook_2;  // this elf hook malloc, hacking it
 
     char*       memory; // char* and not void* to allow math on memory pointer
-    void**      multiblock;
-    uintptr_t*  multiblock_offs;
-    uint32_t*   multiblock_size;
+    multiblock_t*  multiblocks;
     int         multiblock_n;
 
     library_t   *lib;
-    needed_libs_t *neededlibs;
+    needed_libs_t *needed;
+
+    FILE*       file;
+    int         fileno;
 
     kh_mapsymbols_t   *mapsymbols;
     kh_mapsymbols_t   *weaksymbols;
     kh_mapsymbols_t   *localsymbols;
-};
+    kh_defaultversion_t *globaldefver;  // the global default version for symbols (the XXX@@vvvv of symbols)
+    kh_defaultversion_t *weakdefver;    // the weak default version for symbols (the XXX@@vvvv of symbols)
+} elfheader_t;
 
 #define R_386_NONE	0
 #define R_386_32	1

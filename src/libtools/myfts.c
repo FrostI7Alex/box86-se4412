@@ -41,20 +41,20 @@ GO(3)
 // compare
 #ifdef NOALIGN
 #define GO(A)   \
-static uintptr_t my_compare_fct_##A = 0;   \
-static int my_compare_##A(FTSENT* a, FTSENT* b)     \
-{                                                   \
-    return (int)RunFunction(my_context, my_compare_fct_##A, 2, a, b);\
+static uintptr_t my_compare_fct_##A = 0;                                    \
+static int my_compare_##A(FTSENT* a, FTSENT* b)                             \
+{                                                                           \
+    return (int)RunFunctionFmt(my_compare_fct_##A, "pp", a, b); \
 }
 #else
 #define GO(A)   \
 static uintptr_t my_compare_fct_##A = 0;   \
-static int my_compare_##A(FTSENT* a, FTSENT* b)     \
-{                                                   \
-    x86_ftsent_t x86_a, x86_b;                      \
-    UnalignFTSENT(&x86_a, a);                       \
-    UnalignFTSENT(&x86_b, b);                       \
-    return (int)RunFunction(my_context, my_compare_fct_##A, 2, x86_a, x86_b);\
+static int my_compare_##A(FTSENT* a, FTSENT* b)                                     \
+{                                                                                   \
+    x86_ftsent_t x86_a, x86_b;                                                      \
+    UnalignFTSENT(&x86_a, a);                                                       \
+    UnalignFTSENT(&x86_b, b);                                                       \
+    return (int)RunFunctionFmt(my_compare_fct_##A, "pp", x86_a, x86_b); \
 }
 #endif
 SUPER()
@@ -146,6 +146,7 @@ void freeFts(box86context_t* context, void* ftsp)
 #endif
 EXPORT void* my_fts_open(x86emu_t* emu, void* path, int options, void* compare_fn)
 {
+    (void)emu;
     return fts_open(path, options, findcompareFct(compare_fn));
 }
 
@@ -153,6 +154,8 @@ EXPORT int my_fts_close(x86emu_t* emu, void* ftsp)
 {
     #ifndef NOALIGN
     freeFts(emu->context, ftsp);
+    #else
+    (void)emu;
     #endif
     return fts_close(ftsp);
 }
@@ -160,6 +163,7 @@ EXPORT int my_fts_close(x86emu_t* emu, void* ftsp)
 EXPORT void* my_fts_read(x86emu_t* emu, void* ftsp)
 {
     #ifdef NOALIGN
+    (void)emu;
     return fts_read(ftsp);
     #else
     return getFtsent(getFtsentMap(emu->context, ftsp), fts_read(ftsp), 0);
@@ -169,6 +173,7 @@ EXPORT void* my_fts_read(x86emu_t* emu, void* ftsp)
 EXPORT void* my_fts_children(x86emu_t* emu, void* ftsp, int options)
 {
     #ifdef NOALIGN
+    (void)emu;
     return fts_children(ftsp, options);
     #else
     return getFtsent(getFtsentMap(emu->context, ftsp), fts_children(ftsp, options), 1);
@@ -179,6 +184,8 @@ void InitFTSMap(box86context_t* context)
 {
 #ifndef NOALIGN
     context->ftsmap = kh_init(fts);
+#else
+    (void)context;
 #endif
 }
 void FreeFTSMap(box86context_t* context)
@@ -189,6 +196,7 @@ void FreeFTSMap(box86context_t* context)
     (void)ftsentMap;
     kh_foreach(context->ftsmap, ptr, ftsentMap, freeFts(context, (FTSENT*)ptr));
     kh_destroy(fts, context->ftsmap);
+#else
+    (void)context;
 #endif
 }
-

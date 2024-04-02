@@ -194,7 +194,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
 
         case 0xE8:
             INST_NAME("FLD1");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 VMOV_i_32(v1, 0b01110000);
             } else {
@@ -204,7 +204,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xE9:
             INST_NAME("FLDL2T");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 MOV32(x2, (&f_l2t));
                 VLDR_32(v1, x2, 0);
@@ -216,7 +216,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xEA:     
             INST_NAME("FLDL2E");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 MOV32(x2, (&f_l2e));
                 VLDR_32(v1, x2, 0);
@@ -228,7 +228,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xEB:
             INST_NAME("FLDPI");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 MOV32(x2, (&f_pi));
                 VLDR_32(v1, x2, 0);
@@ -240,7 +240,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xEC:
             INST_NAME("FLDLG2");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 MOV32(x2, (&f_lg2));
                 VLDR_32(v1, x2, 0);
@@ -252,7 +252,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xED:
             INST_NAME("FLDLN2");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 MOV32(x2, (&f_ln2));
                 VLDR_32(v1, x2, 0);
@@ -264,7 +264,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xEE:
             INST_NAME("FLDZ");
-            v1 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v1 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             if(ST_IS_F(0)) {
                 VMOV_8(v1/2, 0);  // float is *2...
             } else {
@@ -309,7 +309,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             break;
         case 0xF2:
             INST_NAME("FPTAN");
-            v2 = x87_do_push(dyn, ninst, x1, NEON_CACHE_ST_F);
+            v2 = x87_do_push(dyn, ninst, x1, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
             v1 = x87_get_st(dyn, ninst, x1, x2, 1, NEON_CACHE_ST_D);
             VMOV_64(0, v1);    // prepare call to tan
             CALL_1D(tan, 0);
@@ -319,15 +319,19 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
             LDRH_IMM8(x1, xEmu, offsetof(x86emu_t, sw));
             BFC(x1, 9, 2); //C1 C2 = 0 0
             STRH_IMM8(x1, xEmu, offsetof(x86emu_t, sw));
-            // so here: F64: Imm8 = abcd efgh that gives => aBbbbbbb bbcdefgh 0000000 00000000 00000000...
-            // and want 1.0 = 0x3ff0000000000000
-            // so 00111111 11110000 00000000 00000000....
-            // a = 0, b = 1, c = 1, d = 1, efgh=0
-            // 0b01110000
-            if(ST_IS_F(0)) {
-                VMOV_i_32(v2, 0b01110000);
+            if(PK(0)==0xdd && PK(1)==0xd8) {
+                MESSAGE(LOG_DUMP, "Optimized next DD D8 fstp st0, st0, not emiting 1\n");
             } else {
-                VMOV_i_64(v2, 0b01110000);
+                // so here: F64: Imm8 = abcd efgh that gives => aBbbbbbb bbcdefgh 0000000 00000000 00000000...
+                // and want 1.0 = 0x3ff0000000000000
+                // so 00111111 11110000 00000000 00000000....
+                // a = 0, b = 1, c = 1, d = 1, efgh=0
+                // 0b01110000
+                if(ST_IS_F(0)) {
+                    VMOV_i_32(v2, 0b01110000);
+                } else {
+                    VMOV_i_64(v2, 0b01110000);
+                }
             }
             break;
         case 0xF3:
@@ -589,7 +593,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 2:
                     INST_NAME("FST float[ED], ST0");
-                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, NEON_CACHE_ST_F);
+                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
                     if(ST_IS_F(0))
                         s0 = v1;
                     else {
@@ -608,7 +612,7 @@ uintptr_t dynarecD9(dynarec_arm_t* dyn, uintptr_t addr, uintptr_t ip, int ninst,
                     break;
                 case 3:
                     INST_NAME("FSTP float[ED], ST0");
-                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, NEON_CACHE_ST_F);
+                    v1 = x87_get_st(dyn, ninst, x1, x2, 0, box86_dynarec_x87double?NEON_CACHE_ST_D:NEON_CACHE_ST_F);
                     if(ST_IS_F(0))
                         s0 = v1;
                     else {

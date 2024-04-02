@@ -16,7 +16,12 @@
 #include "librarian.h"
 #include "callback.h"
 
-const char* krb5Name = "libkrb5.so.3";
+#ifdef ANDROID
+    const char* krb5Name = "libkrb5.so";
+#else
+    const char* krb5Name = "libkrb5.so.3";
+#endif
+
 #define LIBNAME krb5
 
 #define ADDED_FUNCTIONS()           \
@@ -34,10 +39,10 @@ GO(4)
 
 // krb5_prompter ...
 #define GO(A)   \
-static uintptr_t my_krb5_prompter_fct_##A = 0;                                      \
-static int my_krb5_prompter_##A(void* a, void* b, void* c, void* d, int e, void* f) \
-{                                                                                   \
-    return RunFunction(my_context, my_krb5_prompter_fct_##A, 6, a, b, c, d, e, f);  \
+static uintptr_t my_krb5_prompter_fct_##A = 0;                                              \
+static int my_krb5_prompter_##A(void* a, void* b, void* c, void* d, int e, void* f)         \
+{                                                                                           \
+    return RunFunctionFmt(my_krb5_prompter_fct_##A, "pppip", a, b, c, d, e, f); \
 }
 SUPER()
 #undef GO
@@ -58,6 +63,7 @@ static void* find_krb5_prompter_Fct(void* fct)
 
 EXPORT int my_krb5_get_init_creds_password(x86emu_t* emu, void* context, void* creds, void* client, void* password, void* f, void* data, int delta, void* service, void* options)
 {
+    (void)emu;
     return my->krb5_get_init_creds_password(context, creds, client, password, find_krb5_prompter_Fct(f), data, delta, service, options);
 }
 
@@ -68,4 +74,3 @@ EXPORT int my_krb5_get_init_creds_password(x86emu_t* emu, void* context, void* c
     freeMy();
 
 #include "wrappedlib_init.h"
-

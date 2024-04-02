@@ -553,6 +553,15 @@ typedef enum VkStructureType {
     VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_STATISTIC_KHR = 1000269004,
     VK_STRUCTURE_TYPE_PIPELINE_EXECUTABLE_INTERNAL_REPRESENTATION_KHR = 1000269005,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_2_FEATURES_EXT = 1000273000,
+    VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT = 1000274000,
+    VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT = 1000274001,
+    VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT = 1000274002,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT = 1000275000,
+    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT = 1000275001,
+    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT = 1000275002,
+    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT = 1000275003,
+    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT = 1000275004,    
+    VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_EXT = 1000275005,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_GENERATED_COMMANDS_PROPERTIES_NV = 1000277000,
     VK_STRUCTURE_TYPE_GRAPHICS_SHADER_GROUP_CREATE_INFO_NV = 1000277001,
     VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_SHADER_GROUPS_CREATE_INFO_NV = 1000277002,
@@ -569,6 +578,9 @@ typedef enum VkStructureType {
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_MEMORY_REPORT_FEATURES_EXT = 1000284000,
     VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT = 1000284001,
     VK_STRUCTURE_TYPE_DEVICE_MEMORY_REPORT_CALLBACK_DATA_EXT = 1000284002,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_BIAS_CONTROL_FEATURES_EXT = 1000283000,
+    VK_STRUCTURE_TYPE_DEPTH_BIAS_INFO_EXT = 1000283001,
+    VK_STRUCTURE_TYPE_DEPTH_BIAS_REPRESENTATION_INFO_EXT = 1000283002,    
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT = 1000286000,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_PROPERTIES_EXT = 1000286001,
     VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT = 1000287000,
@@ -725,6 +737,13 @@ typedef enum VkStructureType {
     VK_STRUCTURE_TYPE_OPTICAL_FLOW_SESSION_CREATE_PRIVATE_DATA_INFO_NV = 1000464010,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_DITHERING_FEATURES_EXT = 1000465000,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_PROTECTED_ACCESS_FEATURES_EXT = 1000466000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR = 1000470000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES_KHR = 1000470001,
+    VK_STRUCTURE_TYPE_SUBRESOURCE_LAYOUT_2_KHR = 1000338002,
+    VK_STRUCTURE_TYPE_RENDERING_AREA_INFO_KHR = 1000470003,
+    VK_STRUCTURE_TYPE_DEVICE_IMAGE_SUBRESOURCE_INFO_KHR = 1000470004,
+    VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO_KHR = 1000470005,
+    VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO_KHR = 1000470006,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TILE_PROPERTIES_FEATURES_QCOM = 1000484000,
     VK_STRUCTURE_TYPE_TILE_PROPERTIES_QCOM = 1000484001,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_AMIGO_PROFILING_FEATURES_SEC = 1000485000,
@@ -929,7 +948,6 @@ typedef struct my_vkhead_s {
     case VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO:        \
     case VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO:     \
     case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO:           \
-    case VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO:              \
     case VK_STRUCTURE_TYPE_EVENT_CREATE_INFO:               \
     case VK_STRUCTURE_TYPE_FENCE_CREATE_INFO:               \
     case VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO:            \
@@ -1043,6 +1061,31 @@ typedef struct my_vkhead_s {
     case VK_STRUCTURE_TYPE_OPTICAL_FLOW_EXECUTE_INFO_NV:                \
     case VK_STRUCTURE_TYPE_OPTICAL_FLOW_IMAGE_FORMAT_INFO_NV:           \
     case VK_STRUCTURE_TYPE_IMAGE_COPY_2:                                \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MODULE_IDENTIFIER_FEATURES_EXT:   \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_NON_SEAMLESS_CUBE_MAP_FEATURES_EXT:      \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT:   \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_PROPERTIES_EXT: \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_FEATURES_EXT:    \
+    case VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR:            \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT:  \
+    case VK_STRUCTURE_TYPE_DEPTH_BIAS_INFO_EXT:                         \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR:   \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR:     \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT:    \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT:         \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_BIAS_CONTROL_FEATURES_EXT:         \
+    case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT:                    \
+    case VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT:      \
+    case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT:     \
+    case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT:             \
+    case VK_STRUCTURE_TYPE_PRESENT_ID_KHR:                              \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO:  \
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR:  \
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES_KHR:     \
+    case VK_STRUCTURE_TYPE_SUBRESOURCE_LAYOUT_2_KHR:                    \
+    case VK_STRUCTURE_TYPE_RENDERING_AREA_INFO_KHR:                     \
+    case VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO_KHR:     \
+    case VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO_KHR:        \
 
 #define CH(C, B, A) \
     case C:         \
@@ -1051,6 +1094,7 @@ typedef struct my_vkhead_s {
         break;
 
 #define CHANGE(A)    \
+    CH(VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, "uPuuQupupp", A)   \
     CH(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, "uPiUiiup", A)     \
     CH(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO, "uPiUiUU",A)  \
     CH(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,"uPiiiiuuUiuuuu", A)                  \
@@ -1083,12 +1127,12 @@ typedef struct my_vkhead_s {
     CH(VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2, "uPUUuQ", A)       \
     CH(VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, "uPUiUiuQi", A)     \
     CH(VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2, "uPUiUiuQ", A)      \
-    CH(VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2, "uPUUiuQ", A)                \
+    CH(VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2, "uPUUiuQ", A)                 \
     CH(VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INFO_2, "uPUiUuQ", A)                 \
     CH(VK_STRUCTURE_TYPE_RESOLVE_IMAGE_INFO_2, "uPUiUiuQ", A)   \
     CH(VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO_EXT, "uPU", A)                  \
     CH(VK_STRUCTURE_TYPE_DEVICE_MEMORY_OPAQUE_CAPTURE_ADDRESS_INFO, "uPU", A)       \
-    CH(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, "uPiSuPiiUppUUi", A)         \
+    CH(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, "uPiuPiiUppUUi", A)          \
     CH(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR, "uPUUUuuuuu", A)\
     CH(VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT, "uPibp", A)         \
     CH(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONSERVATIVE_RASTERIZATION_PROPERTIES_EXT, "uPfffiiiiii", A)\
@@ -1111,6 +1155,9 @@ typedef struct my_vkhead_s {
     CH(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, "uPpu", A)                     \
     CH(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO, "uPUiiUiiiffff", A)             \
     CH(VK_STRUCTURE_TYPE_OPTICAL_FLOW_IMAGE_FORMAT_PROPERTIES_NV, "uPi", A)         \
+    CH(VK_STRUCTURE_TYPE_RELEASE_SWAPCHAIN_IMAGES_INFO_EXT, "uPUup", A)             \
+    CH(VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES, "uPSuuu", A)             \
+    CH(VK_STRUCTURE_TYPE_DEVICE_IMAGE_SUBRESOURCE_INFO_KHR, "uPPP", A)              \
 
 
 //--------------------------------------------------------------
@@ -1129,7 +1176,7 @@ GO(4)
 static uintptr_t my_vkDebugReportCallback_fct_##A = 0;                                                                  \
 static int my_vkDebugReportCallback_##A(int a, int b, uint64_t c, size_t d, int e, void* f, void* g, void* h)           \
 {                                                                                                                       \
-    return (int)RunFunction(my_context, my_vkDebugReportCallback_fct_##A, 9, a, b, c&0xffffffff, c>>32, d, e, f, g, h); \
+    return (int)RunFunctionFmt(my_vkDebugReportCallback_fct_##A, "iiULuppp", a, b, c, d, e, f, g, h);       \
 }
 SUPER()
 #undef GO
@@ -1160,10 +1207,9 @@ static void* reverse_vkDebugReportCallback_Fct(void* fct)
 //--------------------------------------------------------------
 //---------                   TOOLS                     --------
 //--------------------------------------------------------------
-static int needAlign(my_vkhead_t* x86)
+/* static int needAlign(my_vkhead_t* x86)
 {
     const char* s;
-    const char** src = &s;
     int dst = 0;
     while(x86) {
         switch(x86->sType) {
@@ -1177,7 +1223,7 @@ static int needAlign(my_vkhead_t* x86)
         x86 = x86->pNext;
     }
     return 0;
-}
+} */
 
 //--------------------------------------------------------------
 //---------              ALIGN x86 -> ARM               --------
@@ -1251,7 +1297,7 @@ void* vkalignStruct(void* src, const char* desc, int cnt)
     int a = 0;
     uint32_t* psrc = (uint32_t*)src;
     uint32_t* pdst = (uint32_t*)dst;
-    uint32_t* sign = (uint32_t*)(dst+sz*count);
+    // uint32_t* sign = (uint32_t*)(dst+sz*count);
     void** save = (void**)(dst+sz*count);
     uint32_t q;
     while(count) {
@@ -1445,7 +1491,7 @@ void* vkunalignNewStruct(void* dst, void* src, const char* desc, int cnt)
 {
     int c = 0;
     int a = 1;
-    int sz = vkalignSize(desc);
+    // int sz = vkalignSize(desc);
     uint32_t q;
     uint32_t* psrc = (uint32_t*)src;
     uint32_t* pdst = (uint32_t*)dst;
@@ -1629,14 +1675,13 @@ static void* unalignTox86(my_vkhead_t* src, int cnt)
     if(!cnt || !src)
         return src;
     //printf_log(LOG_INFO, "unalignTox86(%p:%d, %d)\n", src, src->sType, cnt);
-    void* ret = NULL;
     const char* s;
     switch(src->sType) {
-        CHANGE( return vkunalignStruct(src, s, cnt))
+        CHANGE(return vkunalignStruct(src, s, cnt))
         default:
             // no need to unalign, but follow next...
-            if(cnt>1) printf_log(LOG_INFO, "Warning, unalignTox86 of %d struct %d not uspported\n", cnt, src->sType);
-            src->pNext = unalignTox86(src->pNext, 1);
+            //if(cnt>1) printf_log(LOG_INFO, "Warning, unalignTox86 of %d struct %d not uspported\n", cnt, src->sType);
+            src->pNext = unalignTox86(src->pNext, cnt);
             return src;
     }
 }

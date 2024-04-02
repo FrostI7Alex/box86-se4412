@@ -52,17 +52,25 @@ EXPORT uint64_t my_##N##f(void* c)                  \
 #define GO_cFcc(N)                                  \
 EXPORT void* my_##N(void* p, void* c, void* d)      \
 {                                                   \
-    *(double complex*)p = N(*(double complex*)c, *(double complex*)d);   \
+    *(double complex*)p = N(*(double complex*)c, *(double complex*)d); \
     return p;                                       \
 }                                                   \
 EXPORT uint64_t my_##N##f(void* c, void* d)         \
 {                                                   \
     my_float_complex_t ret;                         \
-    ret.f = N##f(*(float complex*)c, *(float complex*)c);               \
+    ret.f = N##f(*(float complex*)c, *(float complex*)d); \
     return ret.u64;                                 \
 }
 
+#ifdef TERMUX
+double complex clog(double complex);
+float complex clogf(float complex);
+double complex cpow(double complex, double complex);
+float complex cpowf(float complex, float complex);
+#endif
+
 GO_cFc(clog)
+GO_cFcc(cpow)
 GO_cFc(csqrt)
 GO_cFc(cproj)
 GO_cFc(cexp)
@@ -78,7 +86,6 @@ GO_cFc(cacosh)
 GO_cFc(casinh)
 GO_cFc(catan)
 GO_cFc(catanh)
-GO_cFcc(cpow)
 
 #undef GO_cFc
 #undef GO_cFcc

@@ -46,17 +46,17 @@ static my_PangoAttrClass_t my_PangoAttrClass_struct_##A = {0};  \
 static uintptr_t my_PangoAttrClass_copy_##A = 0;                \
 static void* my_PangoAttrClass_copyfct##A(void* attr)           \
 {                                                               \
-    return (void*)RunFunction(my_context, my_PangoAttrClass_copy_##A, 1, attr);  \
+    return (void*)RunFunctionFmt(my_PangoAttrClass_copy_##A, "p", attr);    \
 }                                                               \
 static uintptr_t my_PangoAttrClass_del_##A = 0;                 \
 static void my_PangoAttrClass_delfct##A(void* attr)             \
 {                                                               \
-    RunFunction(my_context, my_PangoAttrClass_del_##A, 1, attr);\
+    RunFunctionFmt(my_PangoAttrClass_del_##A, "p", attr);\
 }                                                               \
 static uintptr_t my_PangoAttrClass_equal_##A = 0;               \
 static int my_PangoAttrClass_equalfct##A(void* a, void* b)      \
 {                                                               \
-    return (int)RunFunction(my_context, my_PangoAttrClass_equal_##A, 2, a, b);\
+    return (int)RunFunctionFmt(my_PangoAttrClass_equal_##A, "pp", a, b);    \
 }
 SUPER()
 #undef GO
@@ -85,10 +85,10 @@ static void* find_PangoAttrClass_Fct(my_PangoAttrClass_t* klass)
 }
 // AttrFilter
 #define GO(A)   \
-static uintptr_t my_AttrFilter_fct_##A = 0;                                 \
-static int my_AttrFilter_##A(void* a, void* b)                              \
-{                                                                           \
-    return (int)RunFunction(my_context, my_AttrFilter_fct_##A, 2, a, b);    \
+static uintptr_t my_AttrFilter_fct_##A = 0;                                     \
+static int my_AttrFilter_##A(void* a, void* b)                                  \
+{                                                                               \
+    return (int)RunFunctionFmt(my_AttrFilter_fct_##A, "pp", a, b);  \
 }
 SUPER()
 #undef GO
@@ -107,10 +107,10 @@ static void* find_AttrFilter_Fct(void* fct)
 }
 // AttrDataCopy
 #define GO(A)   \
-static uintptr_t my_AttrDataCopy_fct_##A = 0;                               \
-static void* my_AttrDataCopy_##A(void* a)                                   \
-{                                                                           \
-    return (void*)RunFunction(my_context, my_AttrDataCopy_fct_##A, 1, a);   \
+static uintptr_t my_AttrDataCopy_fct_##A = 0;                                   \
+static void* my_AttrDataCopy_##A(void* a)                                       \
+{                                                                               \
+    return (void*)RunFunctionFmt(my_AttrDataCopy_fct_##A, "p", a);  \
 }
 SUPER()
 #undef GO
@@ -129,10 +129,10 @@ static void* find_AttrDataCopy_Fct(void* fct)
 }
 // GDestroyNotify
 #define GO(A)   \
-static uintptr_t my_GDestroyNotify_fct_##A = 0;   \
-static void my_GDestroyNotify_##A(void* data)     \
-{                                       \
-    RunFunction(my_context, my_GDestroyNotify_fct_##A, 1, data);\
+static uintptr_t my_GDestroyNotify_fct_##A = 0;                         \
+static void my_GDestroyNotify_##A(void* data)                           \
+{                                                                       \
+    RunFunctionFmt(my_GDestroyNotify_fct_##A, "p", data);   \
 }
 SUPER()
 #undef GO
@@ -154,16 +154,19 @@ static void* findGDestroyNotifyFct(void* fct)
 
 EXPORT void my_pango_attribute_init(x86emu_t* emu, void* attr, my_PangoAttrClass_t* klass)
 {
+    (void)emu;
     my->pango_attribute_init(attr, find_PangoAttrClass_Fct(klass));
 }
 
 EXPORT void* my_pango_attr_list_filter(x86emu_t* emu, void* list, void* f, void* data)
 {
+    (void)emu;
     return my->pango_attr_list_filter(list, find_AttrFilter_Fct(f), data);
 }
 
 EXPORT void* my_pango_attr_shape_new_with_data(x86emu_t* emu, void* ink, void* loc, void* data, void* f, void* d)
 {
+    (void)emu;
     return my->pango_attr_shape_new_with_data(ink, loc, data, find_AttrDataCopy_Fct(f), findGDestroyNotifyFct(d));
 }
 

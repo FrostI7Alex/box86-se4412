@@ -5,34 +5,54 @@ option(PYRA "Set to ON if targeting an OpenPandora device" ${PYRA})
 option(RPI2 "Set to ON if targeting an RaspberryPI2 device" ${RPI2})
 option(RPI3 "Set to ON if targeting an RaspberryPI3 device" ${RPI3})
 option(RPI4 "Set to ON if targeting an RaspberryPI4 device" ${RPI4})
+option(RPI3ARM64 "Set to ON if targeting an RaspberryPI3 device with multiarch arm64 and armhf" ${RPI3ARM64})
 option(RPI4ARM64 "Set to ON if targeting an RaspberryPI4 device with multiarch arm64 and armhf" ${RPI4ARM64})
 option(GOA_CLONE "Set to ON if targeting GO Advance clones, like RG351p/v, Gameforce Chi, RGB10..." ${GOA_CLONE})
 option(RK3288 "Set to ON if targeting an Rockchip RK3288 based device" ${RK3288})
 option(RK3399 "Set to ON if targeting an Rockchip RK3399 based device" ${RK3399})
+option(RK3588 "Set to ON if targeting an Rockchip RK3588 / RK3588S based device" ${RK3588})
 option(ODROIDN2 "Set to ON if targeting an Odroid-N2 device" ${ODROIDN2})
 option(TEGRAX1 "Set to ON if targeting an Tegra X1 (ARM64) based device" ${TEGRAX1})
 option(TEGRAX1ARM32 "Set to ON if targeting an Tegra X1 (ARM32) based device" ${TEGRAX1ARM32})
+option(TEGRA_T194 "Set to ON if targeting an Tegra Xavier based device" ${TEGRA_T194})
+option(TEGRA_T234 "Set to ON if targeting an Tegra Orin based device" ${TEGRA_T234})
 option(PHYTIUM "Set to ON if targeting an Phytium (D2000 or FT2000/4) based device" ${PHYTIUM})
 option(GAMESHELL "Set to ON if targeting a GameShell device" ${GAMESHELL})
 option(ODROID "Set to ON if targeting an ODroid device" ${ODROID})
 option(POWER9 "Set to ON if targeting a POWER9 processor" ${POWER9})
 option(SE4412 "Set to ON if targeting an Exynos 4412 device" ${SE4412})
 option(SD845 "Set to ON if targeting a Snapragon 845 based device" ${SD845})
+option(SD888 "Set to ON if targeting a Snapragon 888 based device" ${SD888})
+option(ADLINK "Set to ON if targeting an ADLink AmpereAltra based device" ${ADLINK})
 option(A64 "Set to ON if targeting an Allwinner A64 based device" ${A64})
+option(ARM64 "Set to ON if targeting a generic ARM64 based device" ${ARM64})
+option(BAD_SIGNAL "Set to ON to activate the workaround for incoherent si_info on SIGSEGV" ${BAD_SIGNAL})
 option(LX2160A "Set to ON if targeting an LX2160A based device" ${LX2160A})
 option(ANDROID "Set to ON if targeting an Android device" ${ANDROID})
+option(TERMUX "Set to ON if targeting an Android device with Termux" ${TERMUX})
 option(USE_CCACHE "Set to ON to use ccache if present in the system" ${USE_CCACHE})
 option(HAVE_TRACE "Set to ON to have Trace ability (needs ZydisInfo library)" ${HAVE_TRACE})
 option(NOLOADADDR "Set to ON to avoid fixing the load address of Box86" ${NO_LOADAADR})
 option(NOGETCLOCK "Set to ON to avoid using clock_gettime with CLOCK_MONOTONIC_COARSE for RDTSC opcode (use gltimeofday instead)" ${NOGETCLOCK})
 option(NOGIT "Set to ON if not building from a git clone repo (like when building from a zip download from github)" ${NOGIT})
-if(PANDORA OR PYRA OR RPI2 OR RPI3 OR RPI4 OR GAMESHELL OR ODROID OR GOA_CLONE OR RK3288 OR RK3399 OR ODROIDN2 OR TEGRAX1 OR TEGRAX1ARM32 OR RPI4ARM64 OR PHYTIUM OR SD845 OR A64 OR LX2160A)
+option(NO_LIB_INSTALL "Set ON to not install a few x86 libs that are used by many program" ${NO_LIB_INSTALL})
+option(NO_CONF_INSTALL "Set ON to not install config files" ${NO_CONF_INSTALL})
+
+if(PANDORA OR PYRA OR RPI2 OR RPI3 OR RPI4 OR GAMESHELL OR ODROID OR GOA_CLONE OR RK3288 OR RK3399 OR ODROIDN2 OR TEGRAX1 OR TEGRAX1ARM32 OR TEGRA_T194 OR TEGRA_T234 OR RPI3ARM64 OR RPI4ARM64 OR PHYTIUM OR SD845 OR SD888 OR ADLINK OR A64 OR LX2160A OR ARM64 OR RK3588)
     set(LD80BITS OFF CACHE BOOL "")
     set(NOALIGN OFF CACHE BOOL "")
     set(ARM_DYNAREC ON CACHE BOOL "")
+    if(RK3588)
+        set(BAD_SIGNAL ON CACHE BOOL "")
+    endif()
+endif()
+if(TERMUX)
+    set(ANDROID ON CACHE BOOL "")
+    set(TERMUX_PATH "/data/data/com.termux/files")
 endif()
 if(ANDROID)
     set(NOLOADADDR ON CACHE BOOL "")
+    set(BAD_SIGNAL ON CACHE BOOL "")
 endif()
 option(LD80BITS "Set to ON if host device have 80bits long double (i.e. i386)" ${LD80BITS})
 option(NOALIGN "Set to ON if host device doesn't need re-align (i.e. i386)" ${NOALIGN})
@@ -61,8 +81,10 @@ string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "i686"  _x86)
 string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "x86_64"  _x86_64)
 string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "aarch64"  _aarch64)
 string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "armhf"  _armhf)
+string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "arm"  _arm)
+string(COMPARE EQUAL "${CMAKE_HOST_SYSTEM_PROCESSOR}" "armv8l"  _armv8l)
 
-if(_aarch64 AND (RK3399 OR ODROIDN2 OR TEGRAX1 OR RPI4ARM64 OR PHYTIUM OR SD845 OR A64 OR LX2160A))
+if(_aarch64 AND (RK3399 OR ODROIDN2 OR TEGRAX1 OR TEGRA_T194 OR TEGRA_T234 OR RPI3ARM64 OR RPI4ARM64 OR PHYTIUM OR SD845 OR SD888 OR ADLINK OR A64 OR LX2160A OR RK3588 OR ARM64))
     set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
     #set(CMAKE_ASM_COMPILER arm-linux-gnueabihf-as) #will use gcc in fact
     set(CMAKE_C_COMPILER_TARGET arm-linux-gnueabihf)
@@ -106,6 +128,11 @@ elseif(RPI4)
     add_definitions(-DRPI4)
     add_definitions(-marm -march=armv8-a+crc -mtune=cortex-a72 -mfpu=neon-fp-armv8 -mfloat-abi=hard)
     set(CMAKE_ASM_FLAGS  "-marm -march=armv8-a+crc -mtune=cortex-a72 -mfpu=neon-fp-armv8 -mfloat-abi=hard")
+elseif(RPI3ARM64)
+    add_definitions(-DRPI)
+    add_definitions(-DRPI3ARM64)
+    add_definitions(-marm -march=armv8-a+crc -mtune=cortex-a53 -mfpu=neon-fp-armv8 -mfloat-abi=hard)
+    set(CMAKE_ASM_FLAGS  "-marm -march=armv8-a+crc -mtune=cortex-a53 -mfpu=neon-fp-armv8 -mfloat-abi=hard")
 elseif(RPI4ARM64)
     add_definitions(-DRPI)
     add_definitions(-DRPI4ARM64)
@@ -127,6 +154,14 @@ elseif(SD845)
     add_definitions(-DSD845)
     add_definitions(-marm -march=armv8.2-a+simd+crypto -mtune=cortex-a75.cortex-a55 -mfpu=neon-fp-armv8 -mfloat-abi=hard)
     set(CMAKE_ASM_FLAGS  "-marm -march=armv8.2-a+simd+crypto -mtune=cortex-a75.cortex-a55 -mfpu=neon-fp-armv8 -mfloat-abi=hard")
+elseif(SD888)
+    add_definitions(-DSD888)
+    add_definitions(-marm -march=armv8.4-a+simd+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
+    set(CMAKE_ASM_FLAGS  "-marm -march=armv8.4-a+simd+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard")
+elseif(ADLINK)
+    add_definitions(-DADLINK)
+    add_definitions(-marm -mcpu=neoverse-n1 -mfpu=neon-fp-armv8 -mfloat-abi=hard)
+    set(CMAKE_ASM_FLAGS  "-marm -mcpu=neoverse-n1 -mfpu=neon-fp-armv8 -mfloat-abi=hard")
 elseif(A64)
     add_definitions(-DA64)
     add_definitions(-marm -march=armv8-a+crc+simd+crypto -mcpu=cortex-a53+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
@@ -139,6 +174,15 @@ elseif(RK3399)
     add_definitions(-DRK3399)
     add_definitions(-pipe -march=armv8-a+crc+simd+crypto -mcpu=cortex-a72+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
     set(CMAKE_ASM_FLAGS  "-pipe -march=armv8-a+crc+simd+crypto -mcpu=cortex-a72+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard")
+elseif(RK3588)
+    add_definitions(-DRK3588)
+    add_definitions(-pipe -mcpu=cortex-a76.cortex-a55+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
+    add_definitions(-DBAD_SIGNAL)
+    set(CMAKE_ASM_FLAGS  "-pipe -mcpu=cortex-a76.cortex-a55+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard")
+elseif(ARM64)
+    add_definitions(-DARM64)
+    add_definitions(-pipe -march=armv8-a+crc+simd+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
+    set(CMAKE_ASM_FLAGS  "-pipe -march=armv8-a+crc+simd+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard")
 elseif(ODROIDN2)
     add_definitions(-DODROIDN2)
     add_definitions(-pipe -march=armv8-a+crc+simd+crypto -mcpu=cortex-a73.cortex-a53+crypto -mfpu=crypto-neon-fp-armv8 -mfloat-abi=hard)
@@ -151,6 +195,14 @@ elseif(TEGRAX1ARM32)
     add_definitions(-DTEGRAX1ARM32)
     add_definitions(-marm -pipe -march=armv8-a+crc -mcpu=cortex-a57 -mfpu=neon-fp-armv8 -mfloat-abi=hard)
     set(CMAKE_ASM_FLAGS  "-marm -pipe -march=armv8-a+crc -mcpu=cortex-a57 -mfpu=neon-fp-armv8 -mfloat-abi=hard")
+elseif(TEGRA_T194)
+    add_definitions(-DTEGRA_T194)
+    add_definitions(-marm -pipe -march=armv8.2-a+fp16+simd+crypto+predres -mfpu=crypto-neon-fp-armv8 -mcpu=cortex-a76+crypto -mtune=cortex-a76 -mfloat-abi=hard)
+    set(CMAKE_ASM_FLAGS  "-marm -pipe -march=armv8.2-a+fp16+simd+crypto+predres -mfpu=crypto-neon-fp-armv8 -mcpu=cortex-a76+crypto -mtune=cortex-a76 -mfloat-abi=hard")
+elseif(TEGRA_T234)
+    add_definitions(-DTEGRA_T234)
+    add_definitions(-marm -pipe -march=armv8.2-a+fp16+simd+crypto+predres -mfpu=crypto-neon-fp-armv8 -mcpu=cortex-a78ae+crypto -mtune=cortex-a78ae -mfloat-abi=hard)
+    set(CMAKE_ASM_FLAGS  "-marm -pipe -march=armv8.2-a+fp16+simd+crypto+predres -mfpu=crypto-neon-fp-armv8 -mcpu=cortex-a78ae+crypto -mtune=cortex-a78ae -mfloat-abi=hard")
 elseif(PHYTIUM)
     add_definitions(-DPHYTIUM)
     add_definitions(-pipe -march=armv8.1-a+simd+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
@@ -159,11 +211,20 @@ elseif(LX2160A)
     add_definitions(-DLX2160A)
     add_definitions(-pipe -march=armv8-a+crypto+crc -mcpu=cortex-a72+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard)
     set(CMAKE_ASM_FLAGS  "-pipe -march=armv8-a+crypto+crc -mcpu=cortex-a72+crypto -mfpu=neon-fp-armv8 -mfloat-abi=hard")
-elseif(ANDROID)
-    add_definitions(-DANDROID)
 elseif(ARM_DYNAREC)
     #if DYNAREC is selected alone, without any arch
-    set(CMAKE_ASM_FLAGS  "-pipe -march=armv7-a+simd -mfpu=neon")
+    if(NOT ANDROID)
+        set(CMAKE_ASM_FLAGS  "-pipe -march=armv7-a+simd -mfpu=neon")
+    endif()
+endif()
+if(ANDROID)
+    add_definitions(-DANDROID)
+endif()
+if(TERMUX)
+    add_definitions(-DTERMUX)
+endif()
+if(BAD_SIGNAL)
+    add_definitions(-DBAD_SIGNAL)
 endif()
 
 if(POWER9)
@@ -267,6 +328,7 @@ set(ELFLOADER_SRC
     "${BOX86_ROOT}/src/tools/my_cpuid.c"
     "${BOX86_ROOT}/src/tools/gtkclass.c"
     "${BOX86_ROOT}/src/tools/rcfile.c"
+    "${BOX86_ROOT}/src/tools/rbtree.c"
     "${BOX86_ROOT}/src/tools/wine_tools.c"
     "${BOX86_ROOT}/src/elfs/elfloader.c"
     "${BOX86_ROOT}/src/elfs/elfparser.c"
@@ -276,10 +338,8 @@ set(ELFLOADER_SRC
     "${BOX86_ROOT}/src/librarian/dictionnary.c"
     "${BOX86_ROOT}/src/librarian/symbols.c"
     "${BOX86_ROOT}/src/librarian/globalsymbols.c"
+    "${BOX86_ROOT}/src/emu/x86compstrings.c"
     "${BOX86_ROOT}/src/emu/x86emu.c"
-    "${BOX86_ROOT}/src/emu/x86run.c"
-    "${BOX86_ROOT}/src/emu/x86run66.c"
-    "${BOX86_ROOT}/src/emu/x86run660f.c"
     "${BOX86_ROOT}/src/emu/x86run_private.c"
     "${BOX86_ROOT}/src/emu/x86syscall.c"
     "${BOX86_ROOT}/src/emu/x86primop.c"
@@ -287,7 +347,6 @@ set(ELFLOADER_SRC
     "${BOX86_ROOT}/src/emu/x86int3.c"
     "${BOX86_ROOT}/src/emu/x86tls.c"
     "${BOX86_ROOT}/src/emu/x87emu_private.c"
-    "${BOX86_ROOT}/src/emu/x87run.c"
     "${BOX86_ROOT}/src/libtools/auxval.c"
     "${BOX86_ROOT}/src/libtools/myalign.c"
     "${BOX86_ROOT}/src/libtools/myalign64.c"
@@ -304,10 +363,39 @@ if(NOT ANDROID)
     list(APPEND ELFLOADER_SRC "${BOX86_ROOT}/src/libtools/obstack.c")
 endif()
 
+set(INTERPRETER
+    "${BOX86_ROOT}/src/emu/x86run.c"
+    "${BOX86_ROOT}/src/emu/x86run0f.c"
+    "${BOX86_ROOT}/src/emu/x86run64.c"
+    "${BOX86_ROOT}/src/emu/x86run640f.c"
+    "${BOX86_ROOT}/src/emu/x86run6466.c"
+    "${BOX86_ROOT}/src/emu/x86run6467.c"
+    "${BOX86_ROOT}/src/emu/x86run66.c"
+    "${BOX86_ROOT}/src/emu/x86run660f.c"
+    "${BOX86_ROOT}/src/emu/x86run66d9.c"
+    "${BOX86_ROOT}/src/emu/x86run66dd.c"
+    "${BOX86_ROOT}/src/emu/x86run66f20f.c"
+    "${BOX86_ROOT}/src/emu/x86run67.c"
+    "${BOX86_ROOT}/src/emu/x86run6766.c"
+    "${BOX86_ROOT}/src/emu/x86rund8.c"
+    "${BOX86_ROOT}/src/emu/x86rund9.c"
+    "${BOX86_ROOT}/src/emu/x86runda.c"
+    "${BOX86_ROOT}/src/emu/x86rundb.c"
+    "${BOX86_ROOT}/src/emu/x86rundc.c"
+    "${BOX86_ROOT}/src/emu/x86rundd.c"
+    "${BOX86_ROOT}/src/emu/x86runde.c"
+    "${BOX86_ROOT}/src/emu/x86rundf.c"
+    "${BOX86_ROOT}/src/emu/x86runf0.c"
+    "${BOX86_ROOT}/src/emu/x86runf066.c"
+    "${BOX86_ROOT}/src/emu/x86runf20f.c"
+    "${BOX86_ROOT}/src/emu/x86runf30f.c"
+)
+
 set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedlibc.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibpthread.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibrt.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedlibbsd.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibgl.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibglu.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibx11.c"
@@ -334,6 +422,7 @@ set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedpng16.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibxxf86vm.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibxrandr.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedlibxpresent.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibxext.c"
     "${BOX86_ROOT}/src/wrapped/wrappedxinerama.c"
     "${BOX86_ROOT}/src/wrapped/wrappedlibxfixes.c"
@@ -366,6 +455,7 @@ set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedopenal.c"
     "${BOX86_ROOT}/src/wrapped/wrappedalure.c"
     "${BOX86_ROOT}/src/wrapped/wrappedalut.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedopencl.c"
     "${BOX86_ROOT}/src/wrapped/wrappedcurl.c"
     "${BOX86_ROOT}/src/wrapped/wrappedudev0.c"
     "${BOX86_ROOT}/src/wrapped/wrappedudev1.c"
@@ -415,10 +505,12 @@ set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedgsttag.c"
     "${BOX86_ROOT}/src/wrapped/wrappedgstbase.c"
     "${BOX86_ROOT}/src/wrapped/wrappedgstapp.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedlibibus.c"
     "${BOX86_ROOT}/src/wrapped/wrappeddbusmenugtk.c"
     "${BOX86_ROOT}/src/wrapped/wrappeddbusmenuglib.c"
     "${BOX86_ROOT}/src/wrapped/wrappedappindicator.c"
     "${BOX86_ROOT}/src/wrapped/wrappedappindicator3.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedayatanaappindicator3.c"
     "${BOX86_ROOT}/src/wrapped/wrappedatk.c"
     "${BOX86_ROOT}/src/wrapped/wrappedatkbridge.c"
     "${BOX86_ROOT}/src/wrapped/wrappedpangoft2.c"
@@ -470,6 +562,9 @@ set(WRAPPEDS
     "${BOX86_ROOT}/src/wrapped/wrappedpcap.c"
     "${BOX86_ROOT}/src/wrapped/wrappedfaudio.c"
     "${BOX86_ROOT}/src/wrapped/wrappedtbbmallocproxy.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedlibfuse.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedatomic.c"
+    "${BOX86_ROOT}/src/wrapped/wrappedlibpcre.c"
 )
 if(ANDROID)
     list(APPEND WRAPPEDS
@@ -499,7 +594,7 @@ add_custom_command(
     OUTPUT "${BOX86_ROOT}/src/wrapped/generated/functions_list.txt"
     COMMAND "${PYTHON_EXECUTABLE}" "${BOX86_ROOT}/rebuild_wrappers.py" 
     "${BOX86_ROOT}" 
-    "PANDORA" "HAVE_LD80BITS" "NOALIGN" "HAVE_TRACE" "POWERPCLE" "ANDROID" "--" 
+    "PANDORA" "HAVE_LD80BITS" "NOALIGN" "HAVE_TRACE" "POWERPCLE" "ANDROID" "TERMUX" "--" 
     ${WRAPPEDS_HEAD}
     MAIN_DEPENDENCY "${BOX86_ROOT}/rebuild_wrappers.py"
     DEPENDS ${WRAPPEDS} ${WRAPPEDS_HEAD}
@@ -523,7 +618,9 @@ if(ARM_DYNAREC)
 
         "${BOX86_ROOT}/src/dynarec/dynarec_arm.c"
         "${BOX86_ROOT}/src/dynarec/dynarec_arm_functions.c"
+        "${BOX86_ROOT}/src/dynarec/dynarec_arm_jmpnext.c"
         "${BOX86_ROOT}/src/dynarec/arm_printer.c"
+        "${BOX86_ROOT}/src/emu/x86test.c"
 
         "${BOX86_ROOT}/src/dynarec/arm_prolog.S"
         "${BOX86_ROOT}/src/dynarec/arm_epilog.S"
@@ -571,6 +668,8 @@ if(ARM_DYNAREC)
     set_target_properties(arm_pass2 PROPERTIES COMPILE_FLAGS "-DSTEP=2")
     add_library(arm_pass3 OBJECT ${DYNAREC_PASS})
     set_target_properties(arm_pass3 PROPERTIES COMPILE_FLAGS "-DSTEP=3")
+    add_library(test_interpreter OBJECT ${INTERPRETER})
+    set_target_properties(test_interpreter PROPERTIES COMPILE_FLAGS "-DTEST_INTERPRETER")
     add_dependencies(arm_pass0 WRAPPERS)
     add_dependencies(arm_pass1 WRAPPERS)
     add_dependencies(arm_pass2 WRAPPERS)
@@ -582,6 +681,7 @@ if(ARM_DYNAREC)
         $<TARGET_OBJECTS:arm_pass1>
         $<TARGET_OBJECTS:arm_pass2>
         $<TARGET_OBJECTS:arm_pass3>
+        $<TARGET_OBJECTS:test_interpreter>
     )
 
 endif()
@@ -591,15 +691,17 @@ if(ARM_DYNAREC)
     add_custom_command(
         OUTPUT "${BOX86_ROOT}/src/git_head.h"
         COMMAND bash -c "echo \\\#define GITREV \\\"$(git rev-parse --short HEAD)\\\">\"${BOX86_ROOT}/src/git_head.h\""
-        DEPENDS dynarec ${ELFLOADER_SRC} ${WRAPPEDS}
+        DEPENDS dynarec ${ELFLOADER_SRC} ${INTERPRETER} ${WRAPPEDS}
         VERBATIM)
 else()
     add_custom_command(
         OUTPUT "${BOX86_ROOT}/src/git_head.h"
         COMMAND bash -c "echo \\\#define GITREV \\\"$(git rev-parse --short HEAD)\\\">\"${BOX86_ROOT}/src/git_head.h\""
-        DEPENDS ${ELFLOADER_SRC} ${WRAPPEDS}
+        DEPENDS ${ELFLOADER_SRC} ${INTERPRETER} ${WRAPPEDS}
         VERBATIM)
 endif()
+
+add_library(interpreter OBJECT ${INTERPRETER})
 
 if(BOX86LIB)
 #build a static or dynamic lib...
@@ -610,9 +712,13 @@ else()
 endif()
 if(ARM_DYNAREC)
     if(ANDROID)
-        target_link_libraries(${BOX86} dynarec m dl)
+        if(TERMUX)
+        target_link_libraries(${BOX86} dynarec interpreter m dl android-sysv-semaphore android-spawn)
+        else()
+        target_link_libraries(${BOX86} dynarec interpreter m dl)
+        endif()
     else()
-        target_link_libraries(${BOX86} dynarec m dl rt pthread resolv)
+        target_link_libraries(${BOX86} dynarec interpreter m dl rt pthread resolv)
     endif()
 endif()
 if(${CMAKE_VERSION} VERSION_LESS "3.13")
@@ -632,38 +738,77 @@ add_executable(${BOX86} ${ELFLOADER_SRC} ${WRAPPEDS} "${BOX86_ROOT}/src/git_head
 add_dependencies(${BOX86} WRAPPERS)
 add_dependencies(${BOX86} PRINTER)
 if(ANDROID)
+    if(TERMUX)
+    target_link_libraries(${BOX86} dynarec interpreter m dl android-complex-math android-sysv-semaphore android-spawn )
+    else()
+    target_link_libraries(${BOX86} dynarec interpreter m dl)
+    endif()
     target_link_libraries(${BOX86} c m dl)
 else()
     #target_link_libraries(${BOX86} c m dl rt pthread resolv)
     set_target_properties(${BOX86} PROPERTIES LINK_FLAGS "-Wl,--no-as-needed -lc -lm -ldl -lrt -lpthread -lresolv -Wl,--as-needed -pthread")
 endif()
 if(ARM_DYNAREC)
-    target_link_libraries(${BOX86} dynarec)
+    target_link_libraries(${BOX86} dynarec interpreter)
+else()
+    target_link_libraries(${BOX86} interpreter)
 endif()
 
 if(${CMAKE_VERSION} VERSION_LESS "3.13")
     if(NOT NOLOADADDR)
-        set_target_properties(${BOX86} PROPERTIES LINK_FLAGS "-rdynamic -Wl,-Ttext-segment,${BOX86_ELF_ADDRESS}")
+        if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
+            set_target_properties(${BOX86} PROPERTIES LINK_FLAGS "-rdynamic -Wl,--image-base,${BOX86_ELF_ADDRESS}")
+        else()
+            set_target_properties(${BOX86} PROPERTIES LINK_FLAGS "-rdynamic -Wl,-Ttext-segment,${BOX86_ELF_ADDRESS}")
+        endif()
     else()
         set_target_properties(${BOX86} PROPERTIES LINK_FLAGS -rdynamic)
     endif()
 else()
     target_link_options(${BOX86} PUBLIC -rdynamic)
     if(NOT NOLOADADDR)
-        target_link_options(${BOX86} PUBLIC -Wl,-Ttext-segment,${BOX86_ELF_ADDRESS})
+        if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
+            target_link_options(${BOX86} PUBLIC -Wl,--image-base,${BOX86_ELF_ADDRESS})
+        else()
+            target_link_options(${BOX86} PUBLIC -Wl,-Ttext-segment,${BOX86_ELF_ADDRESS})
+        endif()
     endif()
 endif()
 
 if(NOT _x86 AND NOT _x86_64)
-  install(TARGETS ${BOX86}
+  if(NOT TERMUX)
+   install(TARGETS ${BOX86}
     RUNTIME DESTINATION bin)
-  configure_file(system/box86.conf.cmake system/box86.conf)
-  install(FILES ${CMAKE_BINARY_DIR}/system/box86.conf DESTINATION /etc/binfmt.d/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.6 DESTINATION /usr/lib/i386-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.5 DESTINATION /usr/lib/i386-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libgcc_s.so.1 DESTINATION /usr/lib/i386-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libpng12.so.0 DESTINATION /usr/lib/i386-linux-gnu/)
-  install(FILES ${CMAKE_SOURCE_DIR}/system/box86.box86rc DESTINATION /etc/)
+  else()
+   install(TARGETS ${BOX86}
+    RUNTIME DESTINATION ${TERMUX_PATH}/usr/bin)
+  endif()
+  if(NOT NO_CONF_INSTALL)
+    configure_file(system/box86.conf.cmake system/box86.conf)
+    	if(NOT TERMUX)
+    		install(FILES ${CMAKE_BINARY_DIR}/system/box86.conf DESTINATION /etc/binfmt.d/)
+		install(FILES ${CMAKE_SOURCE_DIR}/system/box86.box86rc DESTINATION /etc/)
+	else()
+		#install(FILES ${CMAKE_BINARY_DIR}/system/box86.conf DESTINATION ${TERMUX_PATH}/usr/etc/binfmt.d/)
+		install(FILES ${CMAKE_SOURCE_DIR}/system/box86.box86rc DESTINATION ${TERMUX_PATH}/usr/etc/)
+	endif()
+  endif()
+  if(NOT NO_LIB_INSTALL)
+    if(NOT TERMUX)
+    	install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.6 DESTINATION /usr/lib/i386-linux-gnu/)
+    	install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.5 DESTINATION /usr/lib/i386-linux-gnu/)
+    	install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libgcc_s.so.1 DESTINATION /usr/lib/i386-linux-gnu/)
+    	install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libpng12.so.0 DESTINATION /usr/lib/i386-linux-gnu/)
+    	install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libunwind.so.8 DESTINATION /usr/lib/i386-linux-gnu/)
+    else()
+
+	    install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.6 DESTINATION ${TERMUX_PATH}/usr/lib/i386-linux-gnu/)
+	    install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libstdc++.so.5 DESTINATION ${TERMUX_PATH}/usr/lib/i386-linux-gnu/)
+	    install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libgcc_s.so.1 DESTINATION ${TERMUX_PATH}/usr/lib/i386-linux-gnu/)
+	    install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libpng12.so.0 DESTINATION ${TERMUX_PATH}/usr/lib/i386-linux-gnu/)
+	    install(FILES ${CMAKE_SOURCE_DIR}/x86lib/libunwind.so.8 DESTINATION ${TERMUX_PATH}/usr/lib/i386-linux-gnu/)
+    endif()
+  endif()
 endif()
 
 if(NOT TARGET uninstall)
@@ -680,7 +825,11 @@ set(CPACK_GENERATOR "DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "ptitSeb")
 set(CPACK_PACKAGE_CONTACT "ptitSeb@box86.org")
 set(CPACK_PACKAGE_DESCRIPTION "Box86 - Linux Userspace x86 Emulator with a twist")
+if(TERMUX)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libandroid-sysv-semaphore, libandroid-spawn")
+else()
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6")
+endif()
 set(CPACK_PACKAGE_HOMEPAGE_URL, "https://box86.org")
 file(STRINGS "${BOX86_ROOT}/src/box86version.h" TEMP_STRING REGEX "BOX86_MAJOR\\s*")
 string(REGEX REPLACE "BOX86_MAJOR" "" TEMP_STRING ${TEMP_STRING})
@@ -694,16 +843,29 @@ string(REGEX MATCH "[0-9]" BOX86_REVISION ${TEMP_STRING})
 set(CPACK_PACKAGE_VERSION_MAJOR ${BOX86_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${BOX86_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${BOX86_REVISION})
+if(NOT TERMUX)
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/postinst")
-if(_aarch64 OR _armhf)
+endif()
+if(_aarch64 OR _armhf OR _arm OR _armv8l)
+    if(TERMUX)
+    set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm")
+    else()
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "armhf")
+    endif()
 elseif(_x86_64 OR _x86)
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "i386")
 else()
     #probably wrong...
     execute_process(COMMAND "dpkg --print-architecture" OUTPUT_VARIABLE CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 endif()
-set(CPACK_DEBIAN_FILE_NAME "${BOX86}-${BOX86_MAJOR}.${BOX86_MINOR}.${BOX86_REVISION}_Linux-${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
+if(TERMUX)
+set(CPACK_PACKAGING_INSTALL_PREFIX "${TERMUX_PATH}/usr")
+endif()
+if(NOT TERMUX)
+set(CPACK_DEBIAN_FILE_NAME "${BOX86}-${BOX86_MAJOR}.${BOX86_MINOR}.${BOX86_REVISION}_${CMAKE_SYSTEM_NAME}-${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
+else()
+set(CPACK_DEBIAN_FILE_NAME "${BOX86}-${BOX86_MAJOR}.${BOX86_MINOR}.${BOX86_REVISION}_Termux-${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
+endif()
 INCLUDE(CPack)
 
 add_test(NAME bootSyscall COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86} 
@@ -793,7 +955,7 @@ add_test(NAME sse COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/$
     -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref17.txt
     -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
 
-set_tests_properties(sse PROPERTIES ENVIRONMENT "BOX86_DYNAREC_FASTNAN=0")
+set_tests_properties(sse PROPERTIES ENVIRONMENT "BOX86_DYNAREC_FASTNAN=0;BOX86_DYNAREC_FASTROUND=0")
 
 add_test(NAME longjumpInSignals COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86} 
     -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test18 -D TEST_OUTPUT=tmpfile18.txt 
@@ -810,13 +972,45 @@ add_test(NAME idiv COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/
     -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref20.txt
     -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
 
-file(GLOB extension_tests "${CMAKE_SOURCE_DIR}/tests/extensions/*.c")
+add_test(NAME multiple_dlopen COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86} 
+    -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test21 -D TEST_OUTPUT=tmpfile21.txt 
+    -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref21.txt
+    -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+
+add_test(NAME aes COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86} 
+    -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test22 -D TEST_OUTPUT=tmpfile22.txt 
+    -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref22.txt
+    -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+
+file(GLOB extension_tests "${CMAKE_SOURCE_DIR}/tests/extensions/*.c")    
 foreach(file ${extension_tests})
     get_filename_component(testname "${file}" NAME_WE)
     add_test(NAME "${testname}" COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86}
         -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/extensions/${testname} -D TEST_OUTPUT=tmpfile-${testname}.txt
         -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/extensions/${testname}.txt
         -P ${CMAKE_SOURCE_DIR}/runTest.cmake)
-endforeach()
+endforeach()        
 
+add_test(NAME sse_optimized COMMAND ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86} 
+    -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test17_o2 -D TEST_OUTPUT=tmpfile17_o2.txt 
+    -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref17_o2.txt
+    -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+
+set_tests_properties(sse_optimized PROPERTIES ENVIRONMENT "BOX86_DYNAREC_FASTNAN=0;BOX86_DYNAREC_FASTROUND=0")    
+    
+add_test(bswap ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86}
+        -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test23 -D TEST_OUTPUT=tmpfile23.txt
+        -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref23.txt
+        -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+    
+#add_test(feround ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86}
+#        -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test24 -D TEST_OUTPUT=tmpfile24.txt
+#        -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref24.txt
+#        -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+
+add_test(sse4_2 ${CMAKE_COMMAND} -D TEST_PROGRAM=${CMAKE_BINARY_DIR}/${BOX86}
+        -D TEST_ARGS=${CMAKE_SOURCE_DIR}/tests/test25 -D TEST_OUTPUT=tmpfile25.txt
+        -D TEST_REFERENCE=${CMAKE_SOURCE_DIR}/tests/ref25.txt
+        -P ${CMAKE_SOURCE_DIR}/runTest.cmake )
+    
 endif(BOX86LIB)

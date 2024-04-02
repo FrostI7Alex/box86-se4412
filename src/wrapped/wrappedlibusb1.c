@@ -18,7 +18,12 @@
 #include "emu/x86emu_private.h"
 #include "myalign.h"
 
-const char* libusb1Name = "libusb-1.0.so.0";
+#ifdef ANDROID
+    const char* libusb1Name = "libusb-1.0.so";
+#else
+    const char* libusb1Name = "libusb-1.0.so.0";
+#endif
+
 #define LIBNAME libusb1
 
 #define ADDED_FUNCTIONS()           \
@@ -42,10 +47,10 @@ GO(9)   \
 
 // hotplug
 #define GO(A)   \
-static uintptr_t my_hotplug_fct_##A = 0;                                                    \
-static int my_hotplug_##A(void* ctx, void* device, int event, void* data)                   \
-{                                                                                           \
-    return (int)RunFunction(my_context, my_hotplug_fct_##A, 4, ctx, device, event, data);   \
+static uintptr_t my_hotplug_fct_##A = 0;                                                            \
+static int my_hotplug_##A(void* ctx, void* device, int event, void* data)                           \
+{                                                                                                   \
+    return (int)RunFunctionFmt(my_hotplug_fct_##A, "ppip", ctx, device, event, data);   \
 }
 SUPER()
 #undef GO
@@ -67,7 +72,7 @@ static void* findhotplugFct(void* fct)
 static uintptr_t my_transfert_fct_##A = 0;                      \
 static void my_transfert_##A(void* ctx)                         \
 {                                                               \
-    RunFunction(my_context, my_transfert_fct_##A, 1, ctx);      \
+    RunFunctionFmt(my_transfert_fct_##A, "p", ctx); \
 }
 SUPER()
 #undef GO
@@ -102,6 +107,7 @@ static void* reverse_transfert_Fct(void* fct)
 
 EXPORT int my_libusb_hotplug_register_callback(x86emu_t* emu, void* ctx, int event, int flags, int vendor, int product, int dev_class, void* f, void* data, void* handle)
 {
+    (void)emu;
     return my->libusb_hotplug_register_callback(ctx, event, flags, vendor, product, dev_class, findhotplugFct(f), data, handle);
 }
 
@@ -129,6 +135,7 @@ typedef struct my_libusb_transfer_s {
 
 EXPORT void* my_libusb_alloc_transfer(x86emu_t* emu, int num)
 {
+    (void)emu;
     my_libusb_transfer_t* ret = (my_libusb_transfer_t*)my->libusb_alloc_transfer(num);
     if(ret)
         ret->callback = reverse_transfert_Fct(ret->callback);
@@ -137,12 +144,14 @@ EXPORT void* my_libusb_alloc_transfer(x86emu_t* emu, int num)
 
 EXPORT int my_libusb_submit_transfer(x86emu_t* emu, my_libusb_transfer_t* t)
 {
+    (void)emu;
     t->callback = findtransfertFct(t->callback);
     return my->libusb_submit_transfer(t); // don't put back callback, it's unknown if it's safe
 } 
 
 EXPORT int my_libusb_cancel_transfer(x86emu_t* emu, my_libusb_transfer_t* t)
 {
+    (void)emu;
     t->callback = findtransfertFct(t->callback);
     return my->libusb_cancel_transfer(t);
 }
@@ -154,4 +163,3 @@ EXPORT int my_libusb_cancel_transfer(x86emu_t* emu, my_libusb_transfer_t* t)
     freeMy();
 
 #include "wrappedlib_init.h"
-

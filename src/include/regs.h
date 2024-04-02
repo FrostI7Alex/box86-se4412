@@ -7,7 +7,7 @@ enum {
 };
 
 enum {
-    _CS, _DS, _SS, _ES, _FS, _GS
+    _ES, _CS, _SS, _DS, _FS, _GS
 };
 
 
@@ -96,7 +96,9 @@ typedef enum {
 	d_rcr8,
 	d_rcr16,
 	d_rcr32,
-	d_unknown	//46
+	d_shld32,
+	d_shrd32,
+	d_unknown	//66
 } defered_flags_t;
 
 #pragma pack(push, 1)
@@ -178,40 +180,62 @@ typedef enum {
 
 typedef union {
     struct __attribute__ ((__packed__)) {
-        unsigned int F87_IE:1;
-        unsigned int F87_DE:1;
-        unsigned int F87_ZE:1;
-        unsigned int F87_OE:1;
-        unsigned int F87_UE:1;
-        unsigned int F87_PE:1;
-        unsigned int F87_SF:1;
-        unsigned int F87_ES:1;
-        unsigned int F87_C0:1;
-		unsigned int F87_C1:1;
-		unsigned int F87_C2:1;
-		unsigned int F87_TOP:3;
-		unsigned int F87_C3:1;
-		unsigned int F87_B:1;
+        uint16_t F87_IE:1;
+        uint16_t F87_DE:1;
+        uint16_t F87_ZE:1;
+        uint16_t F87_OE:1;
+        uint16_t F87_UE:1;
+        uint16_t F87_PE:1;
+        uint16_t F87_SF:1;
+        uint16_t F87_ES:1;
+        uint16_t F87_C0:1;
+		uint16_t F87_C1:1;
+		uint16_t F87_C2:1;
+		uint16_t F87_TOP:3;
+		uint16_t F87_C3:1;
+		uint16_t F87_B:1;
     } f;
     uint16_t    x16;
 } x87flags_t;
 
 typedef union {
     struct __attribute__ ((__packed__)) {
-        unsigned int C87_IM:1;	// interupt masks
-        unsigned int C87_DM:1;
-        unsigned int C87_ZM:1;
-        unsigned int C87_OM:1;
-        unsigned int C87_UM:1;
-        unsigned int C87_PM:1;
-        unsigned int C87_R1:2;	// reserved
-        unsigned int C87_PC:2;	// precision control (24bits, reserved, 53bits, 64bits)
-        unsigned int C87_RD:2;	// Rounds
-		unsigned int C87_IC:1;
-		unsigned int C87_R2:3;	// reserved
+        uint16_t C87_IM:1;	// interupt masks
+        uint16_t C87_DM:1;
+        uint16_t C87_ZM:1;
+        uint16_t C87_OM:1;
+        uint16_t C87_UM:1;
+        uint16_t C87_PM:1;
+        uint16_t C87_R1:2;	// reserved
+        uint16_t C87_PC:2;	// precision control (24bits, reserved, 53bits, 64bits)
+        uint16_t C87_RD:2;	// Rounds
+		uint16_t C87_IC:1;
+		uint16_t C87_R2:3;	// reserved
     } f;
     uint16_t    x16;
 } x87control_t;
+
+typedef union {
+	struct __attribute__ ((__packed__)) {
+		uint32_t	MXCSR_IE:1;
+		uint32_t	MXCSR_DE:1;
+		uint32_t	MXCSR_ZE:1;
+		uint32_t	MXCSR_OE:1;
+		uint32_t	MXCSR_UE:1;
+		uint32_t	MXCSR_PE:1;
+		uint32_t	MXCSR_DAZ:1;
+		uint32_t	MXCSR_IM:1;
+		uint32_t	MXCSR_DM:1;
+		uint32_t	MXCSR_ZM:1;
+		uint32_t	MXCSR_OM:1;
+		uint32_t	MXCSR_UM:1;
+		uint32_t	MXCSR_PM:1;
+		uint32_t	MXCSR_RC:2;
+		uint32_t	MXCSR_FZ:1;
+		uint32_t	MXCSR_RES:16;
+	} f;
+	uint32_t	x32;
+} mmxcontrol_t;
 
 typedef union {
 	uint64_t	q;
@@ -267,6 +291,26 @@ typedef union {
 #define R_ES emu->segs[_ES]
 #define R_FS emu->segs[_FS]
 #define R_GS emu->segs[_GS]
+#define S_EAX emu->regs[_AX].sdword[0]
+#define S_EBX emu->regs[_BX].sdword[0]
+#define S_ECX emu->regs[_CX].sdword[0]
+#define S_EDX emu->regs[_DX].sdword[0]
+#define S_EDI emu->regs[_DI].sdword[0]
+#define S_ESI emu->regs[_SI].sdword[0]
+#define S_ESP emu->regs[_SP].sdword[0]
+#define S_EBP emu->regs[_BP].sdword[0]
+#define S_AX emu->regs[_AX].sword[0]
+#define S_BX emu->regs[_BX].sword[0]
+#define S_CX emu->regs[_CX].sword[0]
+#define S_DX emu->regs[_DX].sword[0]
+#define S_DI emu->regs[_DI].sword[0]
+#define S_SI emu->regs[_SI].sword[0]
+#define S_SP emu->regs[_SP].sword[0]
+#define S_BP emu->regs[_BP].sword[0]
+#define S_AL emu->regs[_AX].sbyte[0]
+#define S_AH emu->regs[_AX].sbyte[1]
+#define S_CX emu->regs[_CX].sword[0]
+#define S_CL emu->regs[_CX].sbyte[0]
 
 #define ACCESS_FLAG(F)  emu->eflags.f._##F
 #define SET_FLAG(F)     emu->eflags.f._##F = 1

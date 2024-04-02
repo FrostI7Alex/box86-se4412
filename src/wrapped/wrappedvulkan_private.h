@@ -198,7 +198,7 @@ GO(vkGetPhysicalDeviceFormatProperties2, vFpip)
 GOM(vkGetPhysicalDeviceImageFormatProperties2, iFEpPp)
 GO(vkGetPhysicalDeviceMemoryProperties2, vFpp)
 GOM(vkGetPhysicalDeviceProperties2, vFEpp)
-GO(vkGetPhysicalDeviceQueueFamilyProperties2, vFppp)    //VkQueueFamilyProperties2 seems OK
+GO(vkGetPhysicalDeviceQueueFamilyProperties2, iFppp)    //VkQueueFamilyProperties2 seems OK
 GO(vkGetPhysicalDeviceSparseImageFormatProperties2, vFpPpp) //VkSparseImageFormatProperties2 seems OK
 GO(vkGetPhysicalDeviceToolProperties, iFppp)
 GO(vkUpdateDescriptorSetWithTemplate, vFpUUp)
@@ -610,3 +610,54 @@ GO(vkCmdOpticalFlowExecuteNV, vFpUP)
 GOM(vkCreateOpticalFlowSessionNV, iFEpPpp)
 GOM(vkDestroyOpticalFlowSessionNV, vFEpUp)
 GOM(vkGetPhysicalDeviceOpticalFlowImageFormatsNV, iFEpPpp)
+
+// VK_EXT_extended_dynamic_state3
+GO(vkCmdSetAlphaToCoverageEnableEXT, vFpi)
+GO(vkCmdSetAlphaToOneEnableEXT, vFpi)
+GO(vkCmdSetColorBlendAdvancedEXT, vFpuup)
+GO(vkCmdSetColorBlendEnableEXT, vFpuup)
+GO(vkCmdSetColorBlendEquationEXT, vFpuup)
+GO(vkCmdSetColorWriteMaskEXT, vFpuup)
+GO(vkCmdSetConservativeRasterizationModeEXT, vFpi)
+GO(vkCmdSetCoverageModulationModeNV, vFpi)
+GO(vkCmdSetCoverageModulationTableEnableNV, vFpi)
+GO(vkCmdSetCoverageModulationTableNV, vFpup)
+GO(vkCmdSetCoverageReductionModeNV, vFpi)
+GO(vkCmdSetCoverageToColorEnableNV, vFpi)
+GO(vkCmdSetCoverageToColorLocationNV, vFpu)
+GO(vkCmdSetDepthClampEnableEXT, vFpi)
+GO(vkCmdSetDepthClipEnableEXT, vFpi)
+GO(vkCmdSetDepthClipNegativeOneToOneEXT, vFpi)
+GO(vkCmdSetExtraPrimitiveOverestimationSizeEXT, vFpf)
+GO(vkCmdSetLineRasterizationModeEXT, vFpi)
+GO(vkCmdSetLineStippleEnableEXT, vFpi)
+GO(vkCmdSetLogicOpEnableEXT, vFpi)
+GO(vkCmdSetPolygonModeEXT, vFpi)
+GO(vkCmdSetProvokingVertexModeEXT, vFpi)
+GO(vkCmdSetRasterizationSamplesEXT, vFpi)
+GO(vkCmdSetRasterizationStreamEXT, vFpu)
+GO(vkCmdSetRepresentativeFragmentTestEnableNV, vFpi)
+GO(vkCmdSetSampleLocationsEnableEXT, vFpi)
+GO(vkCmdSetSampleMaskEXT, vFpip)
+GO(vkCmdSetShadingRateImageEnableNV, vFpi)
+GO(vkCmdSetTessellationDomainOriginEXT, vFpi)
+GO(vkCmdSetViewportSwizzleNV, vFpuup)
+GO(vkCmdSetViewportWScalingEnableNV, vFpi)
+
+// VK_EXT_swapchain_maintenance1
+GO(vkReleaseSwapchainImagesEXT, iFpp)
+
+// VK_EXT_depth_bias_control
+GO(vkCmdSetDepthBias2EXT, vFpP)
+
+// VK_KHR_present_wait
+GO(vkWaitForPresentKHR, iFpUUU)
+
+// VK_KHR_cooperative_matrix
+GO(vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR, iFppp)    // last arg should be P, but it's an array, with size as second arg *uint32_t and struct looks fine
+
+// VK_KHR_maintenance5
+GO(vkCmdBindIndexBuffer2KHR, vFpUUUu)
+GO(vkGetDeviceImageSubresourceLayoutKHR, vFpPP)
+GO(vkGetImageSubresourceLayout2KHR, vFpUPP)
+GO(vkGetRenderingAreaGranularityKHR, vFpPp)

@@ -23,7 +23,7 @@ const char* gdk3Name = "libgdk-3.so.0";
 
 static char* libname = NULL;
 
-//#define ADDED_FUNCTIONS()           \
+#define ADDED_FUNCTIONS()
 
 #include "generated/wrappedgdk3types.h"
 
@@ -37,10 +37,10 @@ GO(3)
 
 // GdkFilterFunc
 #define GO(A)   \
-static uintptr_t my_filter_fct_##A = 0;   \
-static int my_filter_##A(void* xevent, void* event, void* data)     \
-{                                       \
-    return (int)RunFunction(my_context, my_filter_fct_##A, 3, xevent, event, data);\
+static uintptr_t my_filter_fct_##A = 0;                                                     \
+static int my_filter_##A(void* xevent, void* event, void* data)                             \
+{                                                                                           \
+    return (int)RunFunctionFmt(my_filter_fct_##A, "ppp", xevent, event, data);  \
 }
 SUPER()
 #undef GO
@@ -61,11 +61,12 @@ static void* findFilterFct(void* fct)
 
 static void my3_event_handler(void* event, my_signal_t* sig)
 {
-    RunFunction(my_context, sig->c_handler, 2, event, sig->data);
+    RunFunctionFmt(sig->c_handler, "pp", event, sig->data);
 }
 
 EXPORT void my3_gdk_event_handler_set(x86emu_t* emu, void* func, void* data, void* notify)
 {
+    (void)emu;
     if(!func)
         return my->gdk_event_handler_set(func, data, notify);
 
@@ -76,11 +77,12 @@ EXPORT void my3_gdk_event_handler_set(x86emu_t* emu, void* func, void* data, voi
 
 static void my3_input_function(my_signal_t* sig, int source, int condition)
 {
-    RunFunction(my_context, sig->c_handler, 3, sig->data, source, condition);
+    RunFunctionFmt(sig->c_handler, "pii", sig->data, source, condition);
 }
 
 EXPORT int my3_gdk_input_add(x86emu_t* emu, int source, int condition, void* f, void* data)
 {
+    (void)emu;
     if(!f)
         return my->gdk_input_add_full(source, condition, f, data, NULL);
 
@@ -90,6 +92,7 @@ EXPORT int my3_gdk_input_add(x86emu_t* emu, int source, int condition, void* f, 
 
 EXPORT int my3_gdk_input_add_full(x86emu_t* emu, int source, int condition, void* f, void* data, void* notify)
 {
+    (void)emu;
     if(!f)
         return my->gdk_input_add_full(source, condition, f, data, notify);
     
@@ -99,12 +102,14 @@ EXPORT int my3_gdk_input_add_full(x86emu_t* emu, int source, int condition, void
 
 EXPORT void my3_gdk_init(x86emu_t* emu, void* argc, void* argv)
 {
+    (void)emu;
     my->gdk_init(argc, argv);
     my_checkGlobalGdkDisplay();
 }
 
 EXPORT int my3_gdk_init_check(x86emu_t* emu, void* argc, void* argv)
 {
+    (void)emu;
     int ret = my->gdk_init_check(argc, argv);
     my_checkGlobalGdkDisplay();
     return ret;
@@ -112,11 +117,13 @@ EXPORT int my3_gdk_init_check(x86emu_t* emu, void* argc, void* argv)
 
 EXPORT void my3_gdk_window_add_filter(x86emu_t* emu, void* window, void* f, void* data)
 {
+    (void)emu;
     my->gdk_window_add_filter(window, findFilterFct(f), data);
 }
 
 EXPORT void my3_gdk_window_remove_filter(x86emu_t* emu, void* window, void* f, void* data)
 {
+    (void)emu;
     my->gdk_window_remove_filter(window, findFilterFct(f), data);
 }
 

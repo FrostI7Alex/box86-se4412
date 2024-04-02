@@ -63,10 +63,10 @@ static int signal_cb(void* a, void* b, void* c, void* d)
     }
     printf_log(LOG_DEBUG, "gobject2 Signal called, sig=%p, handler=%p, NArgs=%d\n", sig, (void*)sig->c_handler, i);
     switch(i) {
-        case 1: return (int)RunFunction(my_context, sig->c_handler, 1, sig->data);
-        case 2: return (int)RunFunction(my_context, sig->c_handler, 2, a, sig->data);
-        case 3: return (int)RunFunction(my_context, sig->c_handler, 3, a, b, sig->data);
-        case 4: return (int)RunFunction(my_context, sig->c_handler, 4, a, b, c, sig->data);
+        case 1: return (int)RunFunctionFmt(sig->c_handler, "p", sig->data);
+        case 2: return (int)RunFunctionFmt(sig->c_handler, "pp", a, sig->data);
+        case 3: return (int)RunFunctionFmt(sig->c_handler, "ppp", a, b, sig->data);
+        case 4: return (int)RunFunctionFmt(sig->c_handler, "pppp", a, b, c, sig->data);
     }
     printf_log(LOG_NONE, "Warning, GObject2 signal callback but no data found!");
     return 0;
@@ -75,47 +75,47 @@ static int signal_cb_swapped(my_signal_t* sig, void* b, void* c, void* d)
 {
     // data is in front here...
     printf_log(LOG_DEBUG, "gobject2 swaped4 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 4, sig->data, b, c, d);
+    return (int)RunFunctionFmt(sig->c_handler, "pppp", sig->data, b, c, d);
 }
 static int signal_cb_5(void* a, void* b, void* c, void* d, my_signal_t* sig)
 {
     printf_log(LOG_DEBUG, "gobject2 5 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 5, a, b, c, d, sig->data);
+    return (int)RunFunctionFmt(sig->c_handler, "ppppp", a, b, c, d, sig->data);
 }
 static int signal_cb_swapped_5(my_signal_t* sig, void* b, void* c, void* d, void* e)
 {
     // data is in front here...
     printf_log(LOG_DEBUG, "gobject2 swaped5 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 5, sig->data, b, c, d, e);
+    return (int)RunFunctionFmt(sig->c_handler, "ppppp", sig->data, b, c, d, e);
 }
 static int signal_cb_6(void* a, void* b, void* c, void* d, void* e, my_signal_t* sig)
 {
     printf_log(LOG_DEBUG, "gobject2 6 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 6, a, b, c, d, e, sig->data);
+    return (int)RunFunctionFmt(sig->c_handler, "pppppp", a, b, c, d, e, sig->data);
 }
 static int signal_cb_swapped_6(my_signal_t* sig, void* b, void* c, void* d, void* e, void* f)
 {
     // data is in front here...
     printf_log(LOG_DEBUG, "gobject2 swaped6 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 6, sig->data, b, c, d, e, f);
+    return (int)RunFunctionFmt(sig->c_handler, "pppppp", sig->data, b, c, d, e, f);
 }
 static int signal_cb_8(void* a, void* b, void* c, void* d, void* e, void* f, void* g, my_signal_t* sig)
 {
     printf_log(LOG_DEBUG, "gobject2 8 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 8, a, b, c, d, e, f, g, sig->data);
+    return (int)RunFunctionFmt(sig->c_handler, "pppppppp", a, b, c, d, e, f, g, sig->data);
 }
 static int signal_cb_swapped_8(my_signal_t* sig, void* b, void* c, void* d, void* e, void* f, void* g, void* h)
 {
     // data is in front here...
     printf_log(LOG_DEBUG, "gobject2 swaped8 Signal called, sig=%p\n", sig);
-    return (int)RunFunction(my_context, sig->c_handler, 8, sig->data, b, c, d, e, f, g, h);
+    return (int)RunFunctionFmt(sig->c_handler, "pppppppp", sig->data, b, c, d, e, f, g, h);
 }
 
 static void signal_delete(my_signal_t* sig, void* b)
 {
     uintptr_t d = sig->destroy;
     if(d) {
-        RunFunction(my_context, d, 2, sig->data, b);
+        RunFunctionFmt(d, "pp", sig->data, b);
     }
     printf_log(LOG_DEBUG, "gobject2 Signal deleted, sig=%p, destroy=%p\n", sig, (void*)d);
     box_free(sig);
@@ -123,7 +123,7 @@ static void signal_delete(my_signal_t* sig, void* b)
 
 static void addGObject2Alternate(library_t* lib)
 {
-    #define GO(A, W) AddAutomaticBridge(thread_get_emu(), lib->w.bridge, W, dlsym(lib->w.lib, #A), 0)
+    #define GO(A, W) AddAutomaticBridge(thread_get_emu(), lib->w.bridge, W, dlsym(lib->w.lib, #A), 0, #A)
     GO(g_cclosure_marshal_VOID__VOID,               vFppuppp);
     GO(g_cclosure_marshal_VOID__BOOLEAN,            vFppuppp);
     GO(g_cclosure_marshal_VOID__UCHAR,              vFppuppp);
@@ -169,7 +169,7 @@ static void addGObject2Alternate(library_t* lib)
     GO(g_cclosure_marshal_BOOLEAN__FLAGSv,          vFpppppip);
     GO(g_cclosure_marshal_BOOLEAN__BOXED_BOXEDv,    vFpppppip);
     #undef GO
-    #define GO(A, W) AddAutomaticBridge(thread_get_emu(), lib->w.bridge, W, A, 0)
+    #define GO(A, W) AddAutomaticBridge(thread_get_emu(), lib->w.bridge, W, A, 0, #A)
     GO(signal_cb, iFpppp);
     GO(signal_cb_swapped, iFpppp);
     GO(signal_cb_5, iFppppp);
@@ -184,6 +184,7 @@ static void addGObject2Alternate(library_t* lib)
 
 EXPORT uintptr_t my_g_signal_connect_data(x86emu_t* emu, void* instance, void* detailed, void* c_handler, void* data, void* closure, uint32_t flags)
 {
+    (void)emu;
     //TODO: get the type of instance to be more precise below
 
     my_signal_t *sig = new_mysignal(c_handler, data, closure);
@@ -349,10 +350,10 @@ GO(98)   \
 GO(99)   \
 
 #define GO(A)   \
-static uintptr_t my_copy_fct_##A = 0;   \
-static void* my_copy_##A(void* data)     \
-{                                       \
-    return (void*)RunFunction(my_context, my_copy_fct_##A, 1, data);\
+static uintptr_t my_copy_fct_##A = 0;                                       \
+static void* my_copy_##A(void* data)                                        \
+{                                                                           \
+    return (void*)RunFunctionFmt(my_copy_fct_##A, "p", data);   \
 }
 SUPER()
 #undef GO
@@ -370,10 +371,10 @@ static void* findCopyFct(void* fct)
 }
 
 #define GO(A)   \
-static uintptr_t my_free_fct_##A = 0;   \
-static void my_free_##A(void* data)     \
-{                                       \
-    RunFunction(my_context, my_free_fct_##A, 1, data);\
+static uintptr_t my_free_fct_##A = 0;                       \
+static void my_free_##A(void* data)                         \
+{                                                           \
+    RunFunctionFmt(my_free_fct_##A, "p", data); \
 }
 SUPER()
 #undef GO
@@ -391,10 +392,10 @@ static void* findFreeFct(void* fct)
 }
 // GSignalAccumulator
 #define GO(A)   \
-static uintptr_t my_accumulator_fct_##A = 0;   \
-static int my_accumulator_##A(void* ihint, void* return_accu, void* handler_return, void* data)     \
-{                                       \
-    return RunFunction(my_context, my_accumulator_fct_##A, 4, ihint, return_accu, handler_return, data);\
+static uintptr_t my_accumulator_fct_##A = 0;                                                                    \
+static int my_accumulator_##A(void* ihint, void* return_accu, void* handler_return, void* data)                 \
+{                                                                                                               \
+    return RunFunctionFmt(my_accumulator_fct_##A, "pppp", ihint, return_accu, handler_return, data);\
 }
 SUPER()
 #undef GO
@@ -415,11 +416,11 @@ static void* findAccumulatorFct(void* fct)
 // GClosureMarshal
 #define GO(A)   \
 static uintptr_t my_marshal_fct_##A = 0;   \
-static void my_marshal_##A(void* closure, void* return_value, uint32_t n, void* values, void* hint, void* data)     \
-{                                                                                                                   \
-    void* newvalues = vkStructUnalign(values, "idd", n);                                                              \
-    RunFunction(my_context, my_marshal_fct_##A, 6, closure, return_value, n, newvalues, hint, data);                \
-    box_free(newvalues);                                                                                                \
+static void my_marshal_##A(void* closure, void* return_value, uint32_t n, void* values, void* hint, void* data) \
+{                                                                                                               \
+    void* newvalues = vkStructUnalign(values, "idd", n);                                                        \
+    RunFunctionFmt(my_marshal_fct_##A, "ppuppp", closure, return_value, n, newvalues, hint, data);  \
+    box_free(newvalues);                                                                                        \
 }
 SUPER()
 #undef GO
@@ -430,7 +431,7 @@ static void* findMarshalFct(void* fct)
     #define GO(A) if(my_marshal_fct_##A == (uintptr_t)fct) return my_marshal_##A;
     SUPER()
     #undef GO
-    #define GO(A) if(my_marshal_fct_##A == 0) {AddAutomaticBridge(thread_get_emu(), my_lib->w.bridge, vFppuppp, my_marshal_##A, 0); my_marshal_fct_##A = (uintptr_t)fct; return my_marshal_##A; }
+    #define GO(A) if(my_marshal_fct_##A == 0) {AddAutomaticBridge(thread_get_emu(), my_lib->w.bridge, vFppuppp, my_marshal_##A, 0, #A); my_marshal_fct_##A = (uintptr_t)fct; return my_marshal_##A; }
     SUPER()
     #undef GO
     printf_log(LOG_NONE, "Warning, no more slot for gobject Closure Marshal callback\n");
@@ -439,10 +440,10 @@ static void* findMarshalFct(void* fct)
 
 // GClosureNotify
 #define GO(A)   \
-static uintptr_t my_GClosureNotify_fct_##A = 0;   \
-static int my_GClosureNotify_func_##A(void* a, void* b)     \
-{                                       \
-    return RunFunction(my_context, my_GClosureNotify_fct_##A, 2, a, b);\
+static uintptr_t my_GClosureNotify_fct_##A = 0;                                 \
+static int my_GClosureNotify_func_##A(void* a, void* b)                         \
+{                                                                               \
+    return RunFunctionFmt(my_GClosureNotify_fct_##A, "pp", a, b);   \
 }
 SUPER()
 #undef GO
@@ -462,13 +463,13 @@ static void* findGClosureNotify_Fct(void* fct)
 
 // GValueTransform
 #define GO(A)   \
-static uintptr_t my_valuetransform_fct_##A = 0;                             \
-static void my_valuetransform_##A(void* src, void* dst)                     \
-{                                                                           \
-    my_GValue_t asrc, adst;                                                 \
-    alignNGValue(&asrc, src, 1);                                            \
-    RunFunction(my_context, my_valuetransform_fct_##A, 2, &asrc, &adst);    \
-    unalignNGValue(dst, &adst, 1);                                          \
+static uintptr_t my_valuetransform_fct_##A = 0;                                 \
+static void my_valuetransform_##A(void* src, void* dst)                         \
+{                                                                               \
+    my_GValue_t asrc, adst;                                                     \
+    alignNGValue(&asrc, src, 1);                                                \
+    RunFunctionFmt(my_valuetransform_fct_##A, "pp", &asrc, &adst);  \
+    unalignNGValue(dst, &adst, 1);                                              \
 }
 SUPER()
 #undef GO
@@ -487,10 +488,10 @@ static void* findValueTransformFct(void* fct)
 }
 // GCallback  (generic function with 6 arguments, hopefully it's enough)
 #define GO(A)   \
-static uintptr_t my_GCallback_fct_##A = 0;                                             \
-static void* my_GCallback_##A(void* a, void* b, void* c, void* d, void* e, void* f)    \
-{                                                                                           \
-    return (void*)RunFunction(my_context, my_GCallback_fct_##A, 6, a, b, c, d, e, f);  \
+static uintptr_t my_GCallback_fct_##A = 0;                                                      \
+static void* my_GCallback_##A(void* a, void* b, void* c, void* d, void* e, void* f)             \
+{                                                                                               \
+    return (void*)RunFunctionFmt(my_GCallback_fct_##A, "pppppp", a, b, c, d, e, f); \
 }
 SUPER()
 #undef GO
@@ -528,25 +529,25 @@ SUPER()
 #undef GO
 // then the static functions callback that may be used with the structure, but dispatch also have a callback...
 #define GO(A)   \
-static uintptr_t fct_funcs_instance_init_##A = 0;                   \
-static void my_funcs_instance_init_##A(void* pspec) {               \
-    RunFunction(my_context, fct_funcs_instance_init_##A, 1, pspec); \
+static uintptr_t fct_funcs_instance_init_##A = 0;                       \
+static void my_funcs_instance_init_##A(void* pspec) {                   \
+    RunFunctionFmt(fct_funcs_instance_init_##A, "p", pspec);\
 }   \
 static uintptr_t fct_funcs_finalize_##A = 0;                        \
 static void my_funcs_finalize_##A(void* pspec) {                    \
-    RunFunction(my_context, fct_funcs_finalize_##A, 1, pspec);      \
+    RunFunctionFmt(fct_funcs_finalize_##A, "p", pspec); \
 }   \
-static uintptr_t fct_funcs_value_set_default_##A = 0;               \
-static void my_funcs_value_set_default_##A(void* pspec, void* value) {          \
-    RunFunction(my_context, fct_funcs_value_set_default_##A, 2, pspec, value);  \
+static uintptr_t fct_funcs_value_set_default_##A = 0;                                   \
+static void my_funcs_value_set_default_##A(void* pspec, void* value) {                  \
+    RunFunctionFmt(fct_funcs_value_set_default_##A, "pp", pspec, value);    \
 }   \
-static uintptr_t fct_funcs_value_validate_##A = 0;                  \
-static int my_funcs_value_validate_##A(void* pspec, void* value) {  \
-    return (int)RunFunction(my_context, fct_funcs_value_validate_##A, 2, pspec, value); \
+static uintptr_t fct_funcs_value_validate_##A = 0;                                              \
+static int my_funcs_value_validate_##A(void* pspec, void* value) {                              \
+    return (int)RunFunctionFmt(fct_funcs_value_validate_##A, "pp", pspec, value);   \
 }   \
-static uintptr_t fct_funcs_values_cmp_##A = 0;                      \
-static int my_funcs_values_cmp_##A(void* pspec, void* value1, void* value2) {   \
-    return (int)RunFunction(my_context, fct_funcs_values_cmp_##A, 3, pspec, value1, value2);    \
+static uintptr_t fct_funcs_values_cmp_##A = 0;                                                      \
+static int my_funcs_values_cmp_##A(void* pspec, void* value1, void* value2) {                       \
+    return (int)RunFunctionFmt(fct_funcs_values_cmp_##A, "ppp", pspec, value1, value2); \
 }
 
 SUPER()
@@ -580,10 +581,10 @@ static my_GParamSpecTypeInfo_t* findFreeGParamSpecTypeInfo(my_GParamSpecTypeInfo
 
 // GInterfaceInitFunc
 #define GO(A)   \
-static uintptr_t my_GInterfaceInitFunc_fct_##A = 0;                     \
-static void my_GInterfaceInitFunc_##A(void* src, void* dst)            \
-{                                                                   \
-    RunFunction(my_context, my_GInterfaceInitFunc_fct_##A, 2, src, dst);\
+static uintptr_t my_GInterfaceInitFunc_fct_##A = 0;                             \
+static void my_GInterfaceInitFunc_##A(void* src, void* dst)                     \
+{                                                                               \
+    RunFunctionFmt(my_GInterfaceInitFunc_fct_##A, "pp", src, dst);  \
 }
 SUPER()
 #undef GO
@@ -602,10 +603,10 @@ static void* findGInterfaceInitFuncFct(void* fct)
 }
 // GInterfaceFinalizeFunc
 #define GO(A)   \
-static uintptr_t my_GInterfaceFinalizeFunc_fct_##A = 0;                     \
-static void my_GInterfaceFinalizeFunc_##A(void* src, void* dst)            \
-{                                                                   \
-    RunFunction(my_context, my_GInterfaceFinalizeFunc_fct_##A, 2, src, dst);\
+static uintptr_t my_GInterfaceFinalizeFunc_fct_##A = 0;                             \
+static void my_GInterfaceFinalizeFunc_##A(void* src, void* dst)                     \
+{                                                                                   \
+    RunFunctionFmt(my_GInterfaceFinalizeFunc_fct_##A, "pp", src, dst);  \
 }
 SUPER()
 #undef GO
@@ -624,10 +625,10 @@ static void* findGInterfaceFinalizeFuncFct(void* fct)
 }
 // compare
 #define GO(A)   \
-static uintptr_t my_compare_fct_##A = 0;                                \
-static int my_compare_##A(void* a, void* b, void* data)                 \
-{                                                                       \
-    return RunFunction(my_context, my_compare_fct_##A, 3, a, b, data);  \
+static uintptr_t my_compare_fct_##A = 0;                                        \
+static int my_compare_##A(void* a, void* b, void* data)                         \
+{                                                                               \
+    return RunFunctionFmt(my_compare_fct_##A, "ppp", a, b, data);   \
 }
 SUPER()
 #undef GO
@@ -648,6 +649,7 @@ static void* findcompareFct(void* fct)
 
 EXPORT uintptr_t my_g_signal_connect_object(x86emu_t* emu, void* instance, void* detailed, void* c_handler, void* object, uint32_t flags)
 {
+    (void)emu;
     //TODO: get the type of instance to be more precise below
 
     return my->g_signal_connect_object(instance, detailed, findGCallbackFct(c_handler), object, flags);
@@ -655,6 +657,7 @@ EXPORT uintptr_t my_g_signal_connect_object(x86emu_t* emu, void* instance, void*
 
 EXPORT int my_g_boxed_type_register_static(x86emu_t* emu, void* name, void* boxed_copy, void* boxed_free)
 {
+    (void)emu;
     void* bc = findCopyFct(boxed_copy);
     void* bf = findFreeFct(boxed_free);
     return my->g_boxed_type_register_static(name, bc, bf);
@@ -662,6 +665,7 @@ EXPORT int my_g_boxed_type_register_static(x86emu_t* emu, void* name, void* boxe
 
 EXPORT uint32_t my_g_signal_new(x86emu_t* emu, void* name, int itype, int flags, uint32_t offset, void* acc, void* accu_data, void* marsh, int rtype, uint32_t n, void** b)
 {
+    (void)emu;
     printf_log(LOG_DEBUG, "g_signal_new for \"%s\", with offset=%d and %d args\n", (const char*)name, offset, n);
     
     void* cb_acc = findAccumulatorFct(acc);
@@ -684,6 +688,7 @@ EXPORT uint32_t my_g_signal_new(x86emu_t* emu, void* name, int itype, int flags,
 
 EXPORT uint32_t my_g_signal_newv(x86emu_t* emu, void* name, int itype, int flags, void* closure, void* acc, void* accu_data, void* marsh, int rtype, uint32_t n, void* types)
 {
+    (void)emu;
     printf_log(LOG_DEBUG, "g_signal_newv for \"%s\", with %d args\n", (const char*)name, n);
     
     return my->g_signal_newv(name, itype, flags, closure, findAccumulatorFct(acc), accu_data, findMarshalFct(marsh), rtype, n, types);
@@ -691,6 +696,7 @@ EXPORT uint32_t my_g_signal_newv(x86emu_t* emu, void* name, int itype, int flags
 
 EXPORT uint32_t my_g_signal_new_valist(x86emu_t* emu, void* name, int itype, int flags, void* closure, void* acc, void* accu_data, void* marsh, int rtype, uint32_t n, void* b)
 {
+    (void)emu;
     printf_log(LOG_DEBUG, "g_signal_new_valist for \"%s\", with %d args\n", (const char*)name, n);
     
     return my->g_signal_new_valist(name, itype, flags, closure, findAccumulatorFct(acc), accu_data, findMarshalFct(marsh), rtype, n, b);
@@ -698,6 +704,7 @@ EXPORT uint32_t my_g_signal_new_valist(x86emu_t* emu, void* name, int itype, int
 
 EXPORT uint32_t my_g_signal_handlers_block_matched(x86emu_t* emu, void* instance, int mask, uint32_t signal, void* detail, void* closure, void* fnc, void* data)
 {
+    (void)emu;
     // NOTE that I have no idea of the fnc signature!...
     if (fnc) printf_log(LOG_INFO, "Warning, gobject g_signal_handlers_block_matched called with non null function \n");
     fnc = findMarshalFct(fnc);  //... just in case
@@ -706,6 +713,7 @@ EXPORT uint32_t my_g_signal_handlers_block_matched(x86emu_t* emu, void* instance
 
 EXPORT uint32_t my_g_signal_handlers_unblock_matched(x86emu_t* emu, void* instance, int mask, uint32_t signal, void* detail, void* closure, void* fnc, void* data)
 {
+    (void)emu;
     // NOTE that I have no idea of the fnc signature!...
     if (fnc) printf_log(LOG_INFO, "Warning, gobject g_signal_handlers_unblock_matched called with non null function \n");
     fnc = findMarshalFct(fnc);  //... just in case
@@ -714,6 +722,7 @@ EXPORT uint32_t my_g_signal_handlers_unblock_matched(x86emu_t* emu, void* instan
 
 EXPORT uint32_t my_g_signal_handlers_disconnect_matched(x86emu_t* emu, void* instance, int mask, uint32_t signal, void* detail, void* closure, void* fnc, void* data)
 {
+    (void)emu;
     // NOTE that I have no idea of the fnc signature!...
     if (fnc) printf_log(LOG_INFO, "Warning, gobject g_signal_handlers_disconnect_matched called with non null function \n");
     fnc = findMarshalFct(fnc);  //... just in case
@@ -722,6 +731,7 @@ EXPORT uint32_t my_g_signal_handlers_disconnect_matched(x86emu_t* emu, void* ins
 
 EXPORT unsigned long my_g_signal_handler_find(x86emu_t* emu, void* instance, int mask, uint32_t signal, void* detail, void* closure, void* fnc, void* data)
 {
+    (void)emu;
     // NOTE that I have no idea of the fnc signature!...
     if (fnc) printf_log(LOG_INFO, "Warning, gobject g_signal_handler_find called with non null function \n");
     fnc = findMarshalFct(fnc);  //... just in case
@@ -730,6 +740,7 @@ EXPORT unsigned long my_g_signal_handler_find(x86emu_t* emu, void* instance, int
 
 EXPORT void* my_g_object_new(x86emu_t* emu, int type, void* first, void* b)
 {
+    (void)emu;
     if(first)
         return my->g_object_new_valist(type, first, b);
     return my->g_object_new(type, first);
@@ -737,16 +748,19 @@ EXPORT void* my_g_object_new(x86emu_t* emu, int type, void* first, void* b)
 
 EXPORT int my_g_type_register_static(x86emu_t* emu, int parent, void* name, my_GTypeInfo_t* info, int flags)
 {
+    (void)emu;
     return my->g_type_register_static(parent, name, findFreeGTypeInfo(info, parent), flags);
 }
 
 EXPORT int my_g_type_register_fundamental(x86emu_t* emu, int parent, void* name, my_GTypeInfo_t* info, void* finfo, int flags)
 {
+    (void)emu;
     return my->g_type_register_fundamental(parent, name, findFreeGTypeInfo(info, parent), finfo, flags);
 }
 
 EXPORT void my_g_value_register_transform_func(x86emu_t* emu, int src, int dst, void* f)
 {
+    (void)emu;
     my->g_value_register_transform_func(src, dst, findValueTransformFct(f));
 }
 
@@ -755,10 +769,11 @@ static int my_signal_emission_hook(void* ihint, uint32_t n, my_GValue_t* values,
     printf_log(LOG_DEBUG, "gobject2 Signal Emission Hook called, sig=%p\n", sig);
     void* my_values = alloca(n*(4+2*8));
     unalignNGValue(my_values, values, n);
-    return (int)RunFunction(my_context, sig->c_handler, 4, ihint, n, my_values, sig->data);
+    return (int)RunFunctionFmt(sig->c_handler, "pupp", ihint, n, my_values, sig->data);
 }
 EXPORT unsigned long my_g_signal_add_emission_hook(x86emu_t* emu, uint32_t signal, void* detail, void* f, void* data, void* notify)
 {
+    (void)emu;
     // there can be many signals connected, so something "light" is needed here
 
     if(!f)
@@ -789,6 +804,7 @@ typedef struct my_GInterfaceInfo_s {
 
 EXPORT void my_g_type_add_interface_static(x86emu_t* emu, int instance_type, int interface_type, my_GInterfaceInfo_t* info)
 {
+    (void)emu;
     my_GInterfaceInfo_t i = {0};
     i.interface_init = findGInterfaceInitFuncFct(info->interface_init);
     i.interface_finalize = findGInterfaceFinalizeFuncFct(info->interface_finalize);
@@ -798,31 +814,37 @@ EXPORT void my_g_type_add_interface_static(x86emu_t* emu, int instance_type, int
 
 EXPORT void my_g_param_spec_set_qdata_full(x86emu_t* emu, void* pspec, uint32_t quark, void* data, void* notify)
 {
+    (void)emu;
     my->g_param_spec_set_qdata_full(pspec, quark, data, findFreeFct(notify));
 }
 
 EXPORT int my_g_param_type_register_static(x86emu_t* emu, void* name, void* pspec_info)
 {
+    (void)emu;
     return my->g_param_type_register_static(name, findFreeGParamSpecTypeInfo(pspec_info));
 }
 
 EXPORT void* my_g_value_array_sort(x86emu_t* emu, void* array, void* comp)
 {
+    (void)emu;
     return my->g_value_array_sort(array, findcompareFct(comp));
 }
 
 EXPORT void* my_g_value_array_sort_with_data(x86emu_t* emu, void* array, void* comp, void* data)
 {
+    (void)emu;
     return my->g_value_array_sort_with_data(array, findcompareFct(comp), data);
 }
 
 EXPORT void my_g_object_set_data_full(x86emu_t* emu, void* object, void* key, void* data, void* notify)
 {
+    (void)emu;
     my->g_object_set_data_full(object, key, data, findFreeFct(notify));
 }
 
 EXPORT void* my_g_type_class_peek_parent(x86emu_t* emu, void* object)
 {
+    (void)emu;
     void* klass = my->g_type_class_peek_parent(object);
     int type = klass?*(int*)klass:0;
     return wrapCopyGTKClass(klass, type);
@@ -858,11 +880,13 @@ EXPORT void* my_g_param_spec_get_default_value(void* spec)
 
 EXPORT void my_g_closure_set_marshal(x86emu_t* emu, void* closure, void* marshal)
 {
+    (void)emu;
     my->g_closure_set_marshal(closure, findMarshalFct(marshal));
 }
 
 EXPORT void my_g_closure_add_finalize_notifier(x86emu_t* emu, void* closure, void* data, void* f)
 {
+    (void)emu;
     my->g_closure_add_finalize_notifier(closure, data, findGClosureNotify_Fct(f));
 }
 
@@ -882,4 +906,3 @@ EXPORT void my_g_closure_add_finalize_notifier(x86emu_t* emu, void* closure, voi
     freeMy();
 
 #include "wrappedlib_init.h"
-

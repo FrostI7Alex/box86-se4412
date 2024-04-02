@@ -16,7 +16,12 @@
 #include "emu/x86emu_private.h"
 #include "callback.h"
 
-const char* curlName = "libcurl.so.4";
+#ifdef ANDROID
+    const char* curlName = "libcurl.so";
+#else
+    const char* curlName = "libcurl.so.4";
+#endif
+
 #define ALTNAME "libcurl-gnutls.so.4"
 #define LIBNAME curl
 
@@ -323,10 +328,10 @@ typedef enum {
 
 // write
 #define GO(A)   \
-static uintptr_t my_write_fct_##A = 0;   \
-static size_t my_write_##A(char* ptr, size_t size, size_t nmemb, void* userdata)     \
-{                                       \
-    return (size_t)RunFunction(my_context, my_write_fct_##A, 4, ptr, size, nmemb, userdata);\
+static uintptr_t my_write_fct_##A = 0;                                                              \
+static size_t my_write_##A(char* ptr, size_t size, size_t nmemb, void* userdata)                    \
+{                                                                                                   \
+    return (size_t)RunFunctionFmt(my_write_fct_##A, "pLLp", ptr, size, nmemb, userdata);\
 }
 SUPER()
 #undef GO
@@ -346,10 +351,10 @@ static void* find_write_Fct(void* fct)
 
 // read
 #define GO(A)   \
-static uintptr_t my_read_fct_##A = 0;   \
-static size_t my_read_##A(char* buffer, size_t size, size_t nitems, void* userdata)     \
-{                                       \
-    return (size_t)RunFunction(my_context, my_read_fct_##A, 4, buffer, size, nitems, userdata);\
+static uintptr_t my_read_fct_##A = 0;                                                                   \
+static size_t my_read_##A(char* buffer, size_t size, size_t nitems, void* userdata)                     \
+{                                                                                                       \
+    return (size_t)RunFunctionFmt(my_read_fct_##A, "pLLp", buffer, size, nitems, userdata); \
 }
 SUPER()
 #undef GO
@@ -369,10 +374,10 @@ static void* find_read_Fct(void* fct)
 
 // ioctl
 #define GO(A)   \
-static uintptr_t my_ioctl_fct_##A = 0;   \
-static size_t my_ioctl_##A(void* handle, int32_t fnc, void* userdata)     \
-{                                       \
-    return (size_t)RunFunction(my_context, my_ioctl_fct_##A, 3, handle, fnc, userdata);\
+static uintptr_t my_ioctl_fct_##A = 0;                                                          \
+static size_t my_ioctl_##A(void* handle, int32_t fnc, void* userdata)                           \
+{                                                                                               \
+    return (size_t)RunFunctionFmt(my_ioctl_fct_##A, "pip", handle, fnc, userdata);  \
 }
 SUPER()
 #undef GO
@@ -392,10 +397,10 @@ static void* find_ioctl_Fct(void* fct)
 
 // seek
 #define GO(A)   \
-static uintptr_t my_seek_fct_##A = 0;   \
-static int32_t my_seek_##A(void* userdata, int64_t off, int32_t origin)     \
-{                                       \
-    return (int32_t)RunFunction(my_context, my_seek_fct_##A, 4, userdata, (uint32_t)(off&0xffffffff), (uint32_t)((off>>32)&0xffffffff), origin);\
+static uintptr_t my_seek_fct_##A = 0;                                                           \
+static int32_t my_seek_##A(void* userdata, int64_t off, int32_t origin)                         \
+{                                                                                               \
+    return (int32_t)RunFunctionFmt(my_seek_fct_##A, "pIi", userdata, off, origin);  \
 }
 SUPER()
 #undef GO
@@ -415,10 +420,10 @@ static void* find_seek_Fct(void* fct)
 
 // header
 #define GO(A)   \
-static uintptr_t my_header_fct_##A = 0;   \
-static size_t my_header_##A(char* buffer, size_t size, size_t nitems, void* userdata)     \
-{                                       \
-    return (size_t)RunFunction(my_context, my_header_fct_##A, 4, buffer, size, nitems, userdata);\
+static uintptr_t my_header_fct_##A = 0;                                                                     \
+static size_t my_header_##A(char* buffer, size_t size, size_t nitems, void* userdata)                       \
+{                                                                                                           \
+    return (size_t)RunFunctionFmt(my_header_fct_##A, "pLLp", buffer, size, nitems, userdata);   \
 }
 SUPER()
 #undef GO
@@ -438,10 +443,10 @@ static void* find_header_Fct(void* fct)
 
 // progress
 #define GO(A)   \
-static uintptr_t my_progress_fct_##A = 0;   \
-static int my_progress_##A(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow)     \
-{                                       \
-    return (int)RunFunction(my_context, my_progress_fct_##A, 5, clientp, dltotal, dlnow, ultotal, ulnow);\
+static uintptr_t my_progress_fct_##A = 0;                                                                           \
+static int my_progress_##A(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow)               \
+{                                                                                                                   \
+    return (int)RunFunctionFmt(my_progress_fct_##A, "pdddd", clientp, dltotal, dlnow, ultotal, ulnow);  \
 }
 SUPER()
 #undef GO
@@ -463,6 +468,7 @@ static void* find_progress_Fct(void* fct)
 
 EXPORT uint32_t my_curl_easy_setopt(x86emu_t* emu, void* handle, uint32_t option, void* param)
 {
+    (void)emu;
     switch(option) {
         case CURLOPT_WRITEDATA:
             return my->curl_easy_setopt(handle, option, param);
@@ -528,4 +534,3 @@ EXPORT uint32_t my_curl_easy_setopt(x86emu_t* emu, void* handle, uint32_t option
     freeMy();
 
 #include "wrappedlib_init.h"
-

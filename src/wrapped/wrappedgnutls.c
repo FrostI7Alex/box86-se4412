@@ -33,6 +33,7 @@ const char* gnutlsName =
 
 void freeGnutlsMy(void* lib)
 {
+    (void)lib;
     //gnutls_my_t *my = (gnutls_my_t *)lib;
 }
 
@@ -46,10 +47,10 @@ GO(4)
 
 // gnutls_log
 #define GO(A)   \
-static uintptr_t my_gnutls_log_fct_##A = 0;                       \
-static void my_gnutls_log_##A(int level, const char* p)           \
-{                                                                 \
-    RunFunction(my_context, my_gnutls_log_fct_##A, 2, level, p);  \
+static uintptr_t my_gnutls_log_fct_##A = 0;                             \
+static void my_gnutls_log_##A(int level, const char* p)                 \
+{                                                                       \
+    RunFunctionFmt(my_gnutls_log_fct_##A, "ip", level, p);  \
 }
 SUPER()
 #undef GO
@@ -70,10 +71,10 @@ static void* find_gnutls_log_Fct(void* fct)
 
 // pullpush
 #define GO(A)   \
-static uintptr_t my_pullpush_fct_##A = 0;                                   \
-static long my_pullpush_##A(void* p, void* d, size_t l)                     \
-{                                                                           \
-    return (long)RunFunction(my_context, my_pullpush_fct_##A, 3, p, d, l);  \
+static uintptr_t my_pullpush_fct_##A = 0;                                           \
+static long my_pullpush_##A(void* p, void* d, size_t l)                             \
+{                                                                                   \
+    return (long)RunFunctionFmt(my_pullpush_fct_##A, "ppL", p, d, l);   \
 }
 SUPER()
 #undef GO
@@ -95,10 +96,10 @@ static void* find_pullpush_Fct(void* fct)
 
 // pulltimeout
 #define GO(A)   \
-static uintptr_t my_pulltimeout_fct_##A = 0;                                \
-static int my_pulltimeout_##A(void* p, uint32_t t)                          \
-{                                                                           \
-    return (int)RunFunction(my_context, my_pulltimeout_fct_##A, 2, p, t);   \
+static uintptr_t my_pulltimeout_fct_##A = 0;                                    \
+static int my_pulltimeout_##A(void* p, uint32_t t)                              \
+{                                                                               \
+    return (int)RunFunctionFmt(my_pulltimeout_fct_##A, "pu", p, t); \
 }
 SUPER()
 #undef GO
@@ -121,20 +122,24 @@ static void* find_pulltimeout_Fct(void* fct)
 
 EXPORT void my_gnutls_global_set_log_function(x86emu_t* emu, void* f)
 {
+    (void)emu;
     my->gnutls_global_set_log_function(find_gnutls_log_Fct(f));
 }
 
 EXPORT void my_gnutls_transport_set_pull_function(x86emu_t* emu, void* session, void* f)
 {
+    (void)emu;
     my->gnutls_transport_set_pull_function(session, find_pullpush_Fct(f));
 }
 EXPORT void my_gnutls_transport_set_push_function(x86emu_t* emu, void* session, void* f)
 {
+    (void)emu;
     my->gnutls_transport_set_push_function(session, find_pullpush_Fct(f));
 }
 
 EXPORT void my_gnutls_transport_set_pull_timeout_function(x86emu_t* emu, void* session, void* f)
 {
+    (void)emu;
     my->gnutls_transport_set_pull_timeout_function(session, find_pulltimeout_Fct(f));
 }
 
@@ -145,4 +150,3 @@ EXPORT void my_gnutls_transport_set_pull_timeout_function(x86emu_t* emu, void* s
     freeMy();
 
 #include "wrappedlib_init.h"
-

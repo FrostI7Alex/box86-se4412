@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -32,10 +33,12 @@
 #ifdef DYNAREC
 #include "dynablock.h"
 #include "../dynarec/dynablock_private.h"
+#include "dynarec_arm.h"
 #endif
 
 
 /* Definitions taken from the kernel headers.  */
+#ifndef __i386__
 enum
 {
   REG_GS = 0,
@@ -77,6 +80,7 @@ enum
   REG_SS
 # define REG_SS        REG_SS
 };
+#endif
 
 typedef uint32_t i386_gregset_t[19];
 struct i386_fpreg
@@ -131,35 +135,19 @@ struct i386_fpstate
 
 static void save_fpreg(x86emu_t* emu, struct i386_fpstate* state)
 {
-    state->cw = emu->cw.x16;
-    int top = emu->top&7;
-    int stack = 8-top;
-    if(top==0)  // check if stack is full or empty, based on tag[0]
-        stack = (emu->p_regs[0].tag)?8:0;
-    emu->sw.f.F87_TOP = top;
+    emu->sw.f.F87_TOP = emu->top&7;
     state->sw = emu->sw.x16;
-    uint8_t tags = 0;
-    for (int i=0; i<8; ++i)
-        tags |= ((emu->p_regs[i].tag)<<(i*2)==0b11)?0:1;
+    state->cw = emu->cw.x16;
+    // save SSE and MMX regs
     fpu_fxsave(emu, &state->ControlWord);
 }
 static void load_fpreg(x86emu_t* emu, struct i386_fpstate* state)
 {
+    // copy SSE and MMX regs
+    fpu_fxrstor(emu, &state->ControlWord);
     emu->cw.x16 = state->cw;
     emu->sw.x16 = state->sw;
-    emu->top = emu->sw.f.F87_TOP;
-    uint8_t tags = state->tag;
-    for(int i=0; i<8; ++i)
-        emu->p_regs[i].tag = (tags>>(i*2))?0:0b11;
-    // copy back MMX regs...
-    int top = emu->top&7;
-    int stack = 8-top;
-    if(top==0)  // check if stack is full or empty, based on tag[0]
-        stack = (emu->p_regs[0].tag)?8:0;
-    for(int i=0; i<8; ++i)
-        memcpy((i<stack)?&ST(i):&emu->mmx[i], &state->_st[i], sizeof(mmx87_regs_t));
-    // copy SSE regs
-    fpu_fxrstor(emu, &state->ControlWord);
+    emu->top = emu->sw.f.F87_TOP&7;
 }
 
 typedef struct i386_fpstate *i386_fpregset_t;
@@ -280,7 +268,9 @@ static void sigstack_key_alloc() {
 	pthread_key_create(&sigstack_key, sigstack_destroy);
 }
 
-uint32_t RunFunctionHandler(int* exit, i386_ucontext_t* sigcontext, uintptr_t fnc, int nargs, ...)
+//1<<8 is mutex_dyndump
+#define is_dyndump_locked (1<<8)
+uint32_t RunFunctionHandler(int* exit, int dynarec, i386_ucontext_t* sigcontext, uintptr_t fnc, int nargs, ...)
 {
     if(fnc==0 || fnc==1) {
         printf_log(LOG_NONE, "BOX86: Warning, calling Signal function handler %s with %d args \n", fnc?"SIG_DFL":"SIG_IGN", nargs);
@@ -290,8 +280,12 @@ uint32_t RunFunctionHandler(int* exit, i386_ucontext_t* sigcontext, uintptr_t fn
     //trace_start = 0; trace_end = 1; // disabling trace, globably for now...
 
     x86emu_t *emu = thread_get_emu();
+    #ifdef DYNAREC
+    if(box86_dynarec_test)
+        emu->test.test = 0;
+    #endif
 
-    printf_log(LOG_DEBUG, "%04d|signal function handler %p called, ESP=%p\n", GetTID(), (void*)fnc, (void*)R_ESP);
+    printf_log(LOG_DEBUG, "%04d|signal function handler %p called, ESP=%p, emu=%p\n", GetTID(), (void*)fnc, (void*)R_ESP, emu);
     
     /*SetFS(emu, default_fs);*/
     for (int i=0; i<6; ++i)
@@ -310,17 +304,29 @@ uint32_t RunFunctionHandler(int* exit, i386_ucontext_t* sigcontext, uintptr_t fn
     }
     va_end (va);
 
-    int oldquitonlongjmp = emu->quitonlongjmp;
-    emu->quitonlongjmp = 2;
+    int oldquitonlongjmp = emu->flags.quitonlongjmp;
+    emu->flags.quitonlongjmp = 2;
 
-    EmuCall(emu, fnc);  // avoid DynaCall for now
+    emu->eflags.x32 &= ~(1<<F_TF); // this one needs to cleared
+
+    if(dynarec)
+        DynaCall(emu, fnc);
+    else
+        EmuCall(emu, fnc);
 
     uint32_t ret = R_EAX;
-    emu->quitonlongjmp = oldquitonlongjmp;
+    emu->flags.quitonlongjmp = oldquitonlongjmp;
 
-    if(emu->longjmp) {
+    #ifdef DYNAREC
+    if(box86_dynarec_test) {
+        emu->test.test = 0;
+        emu->test.clean = 0;
+    }
+    #endif
+
+    if(emu->flags.longjmp) {
         // longjmp inside signal handler, lets grab all relevent value and do the actual longjmp in the signal handler
-        emu->longjmp = 0;
+        emu->flags.longjmp = 0;
         if(sigcontext) {
             printf_log(LOG_DEBUG, "Longjmp in signal\n");
             #define GO(R) sigcontext->uc_mcontext.gregs[REG_E##R] = emu->regs[_##R].dword[0]
@@ -483,12 +489,17 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
     x86emu_t *emu = thread_get_emu();
     uintptr_t *frame = (uintptr_t*)R_ESP;
 #if defined(DYNAREC) && defined(__arm__)
-    ucontext_t *p = (ucontext_t *)ucntx;
-    void * pc = (void*)p->uc_mcontext.arm_pc;
     dynablock_t* db = (dynablock_t*)cur_db;//FindDynablockFromNativeAddress(pc);
-    if(db) {
-        frame = (uintptr_t*)p->uc_mcontext.arm_r8;
+    ucontext_t *p = (ucontext_t *)ucntx;
+    void* pc = NULL;
+    if(ucntx) {
+        pc = (void*)p->uc_mcontext.arm_pc;
+        if(db) {
+            frame = (uintptr_t*)p->uc_mcontext.arm_r8;
+        }
     }
+#else
+    (void)ucntx; (void)cur_db;
 #endif
     // stack tracking
 	i386_stack_t *new_ss = my_context->onstack[sig]?(i386_stack_t*)pthread_getspecific(sigstack_key):NULL;
@@ -533,7 +544,7 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
     sigcontext->uc_mcontext.gregs[REG_CS] = R_CS;
     sigcontext->uc_mcontext.gregs[REG_SS] = R_SS;
 #if defined(DYNAREC) && defined(__arm__)
-    if(db) {
+    if(db && p) {
         sigcontext->uc_mcontext.gregs[REG_EAX] = p->uc_mcontext.arm_r4;
         sigcontext->uc_mcontext.gregs[REG_ECX] = p->uc_mcontext.arm_r5;
         sigcontext->uc_mcontext.gregs[REG_EDX] = p->uc_mcontext.arm_r6;
@@ -592,25 +603,79 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
         sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 17;
     else if(sig==SIGSEGV) {
         if((uintptr_t)info->si_addr == sigcontext->uc_mcontext.gregs[REG_EIP]) {
-            sigcontext->uc_mcontext.gregs[REG_ERR] = 0x0010;    // execution flag issue (probably)
-            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = (info->si_code == SEGV_ACCERR)?13:14;
+            sigcontext->uc_mcontext.gregs[REG_ERR] = (info->si_errno==0x1234)?0:0x0010;    // execution flag issue (probably), unless it's a #GP(0)
+            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = ((info->si_code==SEGV_ACCERR) || (info->si_errno==0x1234) || ((uintptr_t)info->si_addr==0))?13:14;
         } else if((info->si_code==SEGV_ACCERR) && !(prot&PROT_WRITE)) {
             sigcontext->uc_mcontext.gregs[REG_ERR] = 0x0002;    // write flag issue
-            /*if(abs((intptr_t)info->si_addr-(intptr_t)sigcontext->uc_mcontext.gregs[REG_ESP])<16)
+            if(abs((intptr_t)info->si_addr-(intptr_t)sigcontext->uc_mcontext.gregs[REG_ESP])<8)
                 sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 12; // stack overflow probably
-            else*/
-                sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 14; // PAGE_FAULT
+            else
+                sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 14;
         } else {
-            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = (info->si_code == SEGV_ACCERR)?13:14;
+            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = (info->si_code==SEGV_ACCERR)?13:14;
             //REG_ERR seems to be INT:8 CODE:8. So for write access segfault it's 0x0002 For a read it's 0x0004 (and 8 for exec). For an int 2d it could be 0x2D01 for example
-            sigcontext->uc_mcontext.gregs[REG_ERR] = 0x0004;    // read error? there is no execute control in box86 anyway
+            sigcontext->uc_mcontext.gregs[REG_ERR] = 0x0004;    // read error? there is no execute control in box86 anyway, and no easy way to see if it's a write error
         }
         if(info->si_code == SEGV_ACCERR && old_code)
             *old_code = -1;
-    } else if(sig==SIGFPE)
-        sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 19;
-    else if(sig==SIGILL)
+        if(info->si_errno == 0x1234) {
+            info2->si_errno = 0;
+            if(*(uint8_t*)info->si_addr == 0xCD) {
+                sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 13;
+                info2->si_addr = NULL;
+                uint8_t int_n = *(uint8_t*)(info->si_addr+1);
+                sigcontext->uc_mcontext.gregs[REG_ERR] = 0x2 | (int_n<<3);
+                // some special cases...
+                if(int_n==3) {
+                    info2->si_signo = SIGTRAP;
+                    sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 3;
+                    sigcontext->uc_mcontext.gregs[REG_ERR] = 0;
+                    sigcontext->uc_mcontext.gregs[REG_EIP]+=2;   // segfault after the INT
+                } else if(int_n==0x04) {
+                    sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 4;
+                    sigcontext->uc_mcontext.gregs[REG_ERR] = 0;
+                    sigcontext->uc_mcontext.gregs[REG_EIP]+=2;   // segfault after the INT
+                }
+            } else if(*(uint8_t*)info->si_addr == 0xCC) {
+                info2->si_signo = SIGTRAP;
+                sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 3;
+                sigcontext->uc_mcontext.gregs[REG_ERR] = 0;
+                sigcontext->uc_mcontext.gregs[REG_EIP]+=1;   // segfault after the INT
+            } else if(*(uint8_t*)info->si_addr == 0xCE) {
+                sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 4;
+                sigcontext->uc_mcontext.gregs[REG_ERR] = 0;
+                sigcontext->uc_mcontext.gregs[REG_EIP]+=1;   // segfault after the INTO
+                info2->si_addr = NULL;
+            } else {
+                info2->si_code = 128;
+                sigcontext->uc_mcontext.gregs[REG_ERR] = 0;
+                sigcontext->uc_mcontext.gregs[REG_EIP] = (uintptr_t)info2->si_addr;
+                info2->si_addr = NULL;
+            }
+        } else if(info->si_errno==0xcafe) {
+            info2->si_errno = 0;
+            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 0;
+            info2->si_signo = SIGFPE;
+        }
+    } else if(sig==SIGFPE) {
+        if (info->si_code == FPE_INTOVF) {
+            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 4;
+        } else {
+            sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 19;
+        }
+    }
+    else if(sig==SIGILL) {
         sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 6;
+        sigcontext->uc_mcontext.gregs[REG_ERR] = 0x0000;
+        info2->si_addr = (void*)sigcontext->uc_mcontext.gregs[REG_EIP];
+        info2->si_code = 2;
+    }
+    else if(sig==SIGTRAP) {
+        sigcontext->uc_mcontext.gregs[REG_TRAPNO] = 3;
+        sigcontext->uc_mcontext.gregs[REG_ERR] = 0;
+        sigcontext->uc_mcontext.gregs[REG_EIP] = (uintptr_t)info2->si_addr;
+        info2->si_addr = NULL;
+    }
     // call the signal handler
     i386_mcontext_t sigmcontext_copy = sigcontext->uc_mcontext;
     // save old value from emu
@@ -626,10 +691,15 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
 
     int exits = 0;
     int ret;
+    int dynarec = 0;
+    #ifdef DYNAREC
+    if(sig!=SIGSEGV && !(Locks&is_dyndump_locked))
+        dynarec = 1;
+    #endif
     if(simple)
-        ret = RunFunctionHandler(&exits, sigcontext, my_context->signals[sig], 1, sig);
+        ret = RunFunctionHandler(&exits, dynarec, sigcontext, my_context->signals[info2->si_signo], 1, info2->si_signo);
     else
-        ret = RunFunctionHandler(&exits, sigcontext, my_context->signals[sig], 3, sig, info2, sigcontext);
+        ret = RunFunctionHandler(&exits, dynarec, sigcontext, my_context->signals[info2->si_signo], 3, info2->si_signo, info2, sigcontext);
     // restore old value from emu
     if(used_stack)  // release stack
         new_ss->ss_flags = 0;
@@ -640,9 +710,8 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
     #undef GO
 
     if(memcmp(&sigcontext->uc_mcontext, &sigmcontext_copy, sizeof(i386_mcontext_t))) {
-        emu_jmpbuf_t* ejb = GetJmpBuf();
-        if(ejb->jmpbuf_ok) {
-            #define GO(R) ejb->emu->regs[_##R].dword[0]=sigcontext->uc_mcontext.gregs[REG_E##R]
+        if(emu->jmpbuf) {
+            #define GO(R) emu->regs[_##R].dword[0]=sigcontext->uc_mcontext.gregs[REG_E##R]
             GO(AX);
             GO(CX);
             GO(DX);
@@ -652,12 +721,12 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
             GO(SP);
             GO(BX);
             #undef GO
-            ejb->emu->ip.dword[0]=sigcontext->uc_mcontext.gregs[REG_EIP];
+            emu->ip.dword[0]=sigcontext->uc_mcontext.gregs[REG_EIP];
             sigcontext->uc_mcontext.gregs[REG_EIP] = R_EIP;
             // flags
-            ejb->emu->eflags.x32=sigcontext->uc_mcontext.gregs[REG_EFL];
+            emu->eflags.x32=sigcontext->uc_mcontext.gregs[REG_EFL];
             // get segments
-            #define GO(S) ejb->emu->segs[_##S]=sigcontext->uc_mcontext.gregs[REG_##S]; ejb->emu->segs_serial[_##S] = 0
+            #define GO(S) emu->segs[_##S]=sigcontext->uc_mcontext.gregs[REG_##S]; emu->segs_serial[_##S] = 0
             GO(GS);
             GO(FS);
             GO(ES);
@@ -665,14 +734,23 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
             GO(CS);
             GO(SS);
             #undef GO
-            load_fpreg(ejb->emu, &sigcontext->xstate.fpstate);
+            load_fpreg(emu, &sigcontext->xstate.fpstate);
             printf_log(LOG_DEBUG, "Context has been changed in Sigactionhanlder, doing siglongjmp to resume emu\n");
             if(old_code)
                 *old_code = -1;    // re-init the value to allow another segfault at the same place
             if(used_stack)  // release stack
                 new_ss->ss_flags = 0;
             //relockMutex(Locks);   // do not relock mutex, because of the siglongjmp, whatever was running is canceled
-            siglongjmp(ejb->jmpbuf, 1);
+            #ifdef DYNAREC
+            if(Locks & is_dyndump_locked)
+                CancelBlock(1);
+            #endif
+            emu->xSPSave = emu->old_savedsp;
+            #ifdef ANDROID
+            siglongjmp(*emu->jmpbuf, 1);
+            #else
+            siglongjmp(emu->jmpbuf, 1);
+            #endif
         }
         printf_log(LOG_INFO, "Warning, context has been changed in Sigactionhanlder%s\n", (sigcontext->uc_mcontext.gregs[REG_EIP]!=sigmcontext_copy.gregs[REG_EIP])?" (EIP changed)":"");
     }
@@ -700,23 +778,48 @@ void my_sigactionhandler_oldcode(int32_t sig, int simple, int Locks, siginfo_t* 
     printf_log(LOG_DEBUG, "Sigactionhanlder main function returned (exit=%d, restorer=%p)\n", exits, (void*)restorer);
     if(exits) {
         //relockMutex(Locks);   // the thread will exit, so no relock there
+        #ifdef DYNAREC
+        if(Locks & is_dyndump_locked)
+            CancelBlock();
+        #endif
         exit(ret);
     }
     if(restorer)
-        RunFunctionHandler(&exits, NULL, restorer, 0);
+        RunFunctionHandler(&exits, 0, NULL, restorer, 0);
     relockMutex(Locks);
 }
 
-extern __thread void* current_helper;
+extern void* current_helper;
+#define USE_SIGNAL_MUTEX
+#ifdef USE_SIGNAL_MUTEX
+#ifdef USE_CUSTOM_MUTEX
+static uint32_t mutex_dynarec_prot = 0;
+#else
+static pthread_mutex_t mutex_dynarec_prot = PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP;
+#endif
+#define lock_signal()     mutex_lock(&mutex_dynarec_prot)
+#define unlock_signal()   mutex_unlock(&mutex_dynarec_prot)
+#else   // USE_SIGNAL_MUTEX
+#define lock_signal()     
+#define unlock_signal()   
+#endif
+
+extern int box86_quit;
+extern int box86_exit_code;
 
 void my_box86signalhandler(int32_t sig, siginfo_t* info, void * ucntx)
 {
     // sig==SIGSEGV || sig==SIGBUS || sig==SIGILL here!
     int log_minimum = (box86_showsegv)?LOG_NONE:((my_context->is_sigaction[sig] && sig==SIGSEGV)?LOG_DEBUG:LOG_INFO);
+    if((sig==SIGSEGV || sig==SIGBUS) && box86_quit) {
+        printf_log(LOG_INFO, "Sigfault/Segbus while quitting, exiting silently\n");
+        _exit(box86_exit_code);    // Hack, segfault while quiting, exit silently
+    }
     ucontext_t *p = (ucontext_t *)ucntx;
     void* addr = (void*)info->si_addr;  // address that triggered the issue
     uintptr_t x86pc = (uintptr_t)-1;
     void* esp = NULL;
+    x86emu_t* emu = thread_get_emu();
 #ifdef __arm__
     void * pc = (void*)p->uc_mcontext.arm_pc;
 #elif defined __i386
@@ -729,87 +832,106 @@ void my_box86signalhandler(int32_t sig, siginfo_t* info, void * ucntx)
 #endif
     int Locks = unlockMutex();
     uint32_t prot = getProtection((uintptr_t)addr);
+    #ifdef BAD_SIGNAL
+    // try to see if the si_code makes sense
+    // the RK3588 tend to need a special Kernel that seems to have a weird behaviour sometimes
+    if((sig==SIGSEGV) && (addr) && (info->si_code == 1) && prot&(PROT_READ|PROT_WRITE|PROT_EXEC)) {
+        printf_log(LOG_DEBUG, "Workaround for suspicious si_code for %p / prot=0x%x\n", addr, prot);
+        info->si_code = 2;
+    }
+    #endif
 #ifdef DYNAREC
-    if((Locks & (1<<8)) && (sig==SIGSEGV) && current_helper) { //1<<8 is mutex_dyndump
+    if((Locks & is_dyndump_locked) && (sig==SIGSEGV) && current_helper) {
+        CancelBlock(0);
         relockMutex(Locks);
         cancelFillBlock();  // Segfault inside a Fillblock
     }
     dynablock_t* db = NULL;
     int db_searched = 0;
     if ((sig==SIGSEGV) && (addr) && (info->si_code == SEGV_ACCERR) && (prot&PROT_CUSTOM)) {
+        lock_signal();
         // access error, unprotect the block (and mark them dirty)
         unprotectDB((uintptr_t)addr, 1, 1);    // unprotect 1 byte... But then, the whole page will be unprotected
         // check if SMC inside block
         db = FindDynablockFromNativeAddress(pc);
         db_searched = 1;
+        int db_need_test = (db && !box86_dynarec_fastpage)?getNeedTest((uintptr_t)db->x86_addr):0;
         dynarec_log(LOG_INFO/*LOG_DEBUG*/, "SIGSEGV with Access error on %p for %p , db=%p(%p)\n", pc, addr, db, db?((void*)db->x86_addr):NULL);
-        static uintptr_t repeated_page = 0;
-        static int repeated_count = 0;
-        if(repeated_page == ((uintptr_t)addr&~0xfff)) {
-            ++repeated_count;   // Access eoor multiple time on same page, disable dynarec on this page a few time...
-            dynarec_log(LOG_DEBUG, "Detecting a Hotpage at %p (%d)\n", (void*)repeated_page, repeated_count);
-            AddHotPage(repeated_page);
-        } else {
-            repeated_page = (uintptr_t)addr&~0xfff;
-            repeated_count = 0;
-        }
-        if(db && ((addr>=db->x86_addr && addr<(db->x86_addr+db->x86_size)) || db->need_test)) {
+        if(db && ((addr>=db->x86_addr && addr<(db->x86_addr+db->x86_size)) || db_need_test)) {
+            if(db && p->uc_mcontext.arm_r0>0x10000)
+                emu = (x86emu_t*)p->uc_mcontext.arm_r0;
             // dynablock got auto-dirty! need to get out of it!!!
-            emu_jmpbuf_t* ejb = GetJmpBuf();
-            if(ejb->jmpbuf_ok) {
-                ejb->emu->regs[_AX].dword[0] = p->uc_mcontext.arm_r4;
-                ejb->emu->regs[_CX].dword[0] = p->uc_mcontext.arm_r5;
-                ejb->emu->regs[_DX].dword[0] = p->uc_mcontext.arm_r6;
-                ejb->emu->regs[_BX].dword[0] = p->uc_mcontext.arm_r7;
-                ejb->emu->regs[_SP].dword[0] = p->uc_mcontext.arm_r8;
-                ejb->emu->regs[_BP].dword[0] = p->uc_mcontext.arm_r9;
-                ejb->emu->regs[_SI].dword[0] = p->uc_mcontext.arm_r10;
-                ejb->emu->regs[_DI].dword[0] = p->uc_mcontext.arm_fp;
-                ejb->emu->ip.dword[0] = getX86Address(db, (uintptr_t)pc);
-                ejb->emu->eflags.x32 = p->uc_mcontext.arm_ip;
+            if(emu->jmpbuf) {
+                emu->regs[_AX].dword[0] = p->uc_mcontext.arm_r4;
+                emu->regs[_CX].dword[0] = p->uc_mcontext.arm_r5;
+                emu->regs[_DX].dword[0] = p->uc_mcontext.arm_r6;
+                emu->regs[_BX].dword[0] = p->uc_mcontext.arm_r7;
+                emu->regs[_SP].dword[0] = p->uc_mcontext.arm_r8;
+                emu->regs[_BP].dword[0] = p->uc_mcontext.arm_r9;
+                emu->regs[_SI].dword[0] = p->uc_mcontext.arm_r10;
+                emu->regs[_DI].dword[0] = p->uc_mcontext.arm_fp;
+                emu->ip.dword[0] = getX86Address(db, (uintptr_t)pc);
+                emu->eflags.x32 = p->uc_mcontext.arm_ip;
                 // check special case opcodes, to adjust regs
-                int special = isSpecialCases(ejb->emu->ip.dword[0], getDBX86N(db, (uintptr_t)pc));
+                int special = isSpecialCases(emu->ip.dword[0], getDBX86N(db, (uintptr_t)pc));
                 switch(special) {
                     case CASE_MOVS:
-                        ejb->emu->regs[_SI].dword[0] -= p->uc_mcontext.arm_r3;
+                        emu->regs[_SI].dword[0] -= p->uc_mcontext.arm_r3;
                         break;
                 }
                 if(addr>=db->x86_addr && addr<(db->x86_addr+db->x86_size)) {
                     dynarec_log(LOG_INFO, "Auto-SMC detected, getting out of current Dynablock (speical=%d)!\n", special);
                 } else {
-                    dynarec_log(LOG_INFO, "Dynablock %p(%p) unprotected, getting out (arm pc=%p, x86_pc=%p, special=%d)!\n", db, db->x86_addr, pc, (void*)ejb->emu->ip.dword[0], special);
+                    dynarec_log(LOG_INFO, "Dynablock %p(%p) unprotected, getting out (arm pc=%p, x86_pc=%p, special=%d)!\n", db, db->x86_addr, pc, (void*)emu->ip.dword[0], special);
                 }
                 //relockMutex(Locks);   // do not relock because of he siglongjmp
-                siglongjmp(ejb->jmpbuf, 2);
+                unlock_signal();
+                if(Locks & is_dyndump_locked)
+                    CancelBlock(1);
+                emu->test.clean = 0;
+                #ifdef ANDROID
+                siglongjmp(*(JUMPBUFF*)emu->jmpbuf, 2);
+                #else
+                siglongjmp(emu->jmpbuf, 2);
+                #endif
             }
             dynarec_log(LOG_INFO, "Warning, Auto-SMC (%p for db %p/%p) detected, but jmpbuffer not ready!\n", (void*)addr, db, (void*)db->x86_addr);
         }
         // done
         if(prot&PROT_WRITE) {
+            unlock_signal();
             // if there is no write permission, don't return and continue to program signal handling
             relockMutex(Locks);
             return;
         }
+        unlock_signal();
+    } else if ((sig==SIGSEGV) && (addr) && (info->si_code == SEGV_ACCERR) && (prot&PROT_DYNAREC_R)) {
+        // unprotect and continue to signal handler, because Write is not there on purpose
+        unprotectDB((uintptr_t)addr, 1, 1);    // unprotect 1 byte... But then, the whole page will be unprotected
     } else if ((sig==SIGSEGV) && (addr) && (info->si_code == SEGV_ACCERR) && (prot&(PROT_READ|PROT_WRITE))) {
+        lock_signal();
         db = FindDynablockFromNativeAddress(pc);
         db_searched = 1;
         if(db && db->x86_addr>= addr && (db->x86_addr+db->x86_size)<addr) {
             dynarec_log(LOG_INFO, "Warning, addr inside current dynablock!\n");
         }
-        if(addr && pc && db) {
-            static void* glitch_pc = NULL;
-            static void* glitch_addr = NULL;
-            static int glitch_prot = 0;
+        // mark stuff as unclean
+        cleanDBFromAddressRange(((uintptr_t)addr)&~(box86_pagesize-1), box86_pagesize, 0);
+        static void* glitch_pc = NULL;
+        static void* glitch_addr = NULL;
+        static int glitch_prot = 0;
+        if(addr && pc /*&& db*/) {
             if((glitch_pc!=pc || glitch_addr!=addr || glitch_prot!=prot)) {
                 // probably a glitch due to intensive multitask...
-                dynarec_log(/*LOG_DEBUG*/LOG_INFO, "SIGSEGV with Access error on %p for %p , db=%p, retrying\n", pc, addr, db);
+                dynarec_log(/*LOG_DEBUG*/LOG_INFO, "SIGSEGV with Access error on %p for %p, db=%p, prot=0x%x, retrying\n", pc, addr, db, prot);
                 glitch_pc = pc;
                 glitch_addr = addr;
                 glitch_prot = prot;
                 relockMutex(Locks);
-                sched_yield();  // give time to the other process
+                unlock_signal();
                 return; // try again
             }
+dynarec_log(/*LOG_DEBUG*/LOG_INFO, "Repeated SIGSEGV with Access error on %p for %p, db=%p, prot=0x%x\n", pc, addr, db, prot);
             glitch_pc = NULL;
             glitch_addr = NULL;
             glitch_prot = 0;
@@ -825,16 +947,20 @@ void my_box86signalhandler(int32_t sig, siginfo_t* info, void * ucntx)
                 glitch2_addr = addr;
                 glitch2_prot = prot;
                 sched_yield();  // give time to the other process
-                forceProtection((uintptr_t)addr, 1, prot); // force the protection
+                refreshProtection((uintptr_t)addr);
                 relockMutex(Locks);
                 sched_yield();  // give time to the other process
+                unlock_signal();
                 return; // try again
             }
             glitch2_pc = NULL;
             glitch2_addr = NULL;
             glitch2_prot = 0;
         }
+        unlock_signal();
     }
+    if(!db_searched)
+        db = FindDynablockFromNativeAddress(pc);
 #else
     void* db = NULL;
 #endif
@@ -888,6 +1014,8 @@ exit(-1);
                 sprintf(myarg, "%d", pid);
                 if(jit_gdb==2)
                     execlp("gdbserver", "gdbserver", "127.0.0.1:1234", "--attach", myarg, (char*)NULL);
+                else if(jit_gdb==3)
+                    execlp("lldb", "lldb", "-p", myarg, (char*)NULL);
                 else
                     execlp("gdb", "gdb", "-pid", myarg, (char*)NULL);
                 exit(-1);
@@ -905,7 +1033,7 @@ exit(-1);
             emu->init_stack, emu->init_stack+emu->size_stack, emu->stack2free, (void*)R_EBP, 
             addr, info->si_code, prot, db, db?db->block:0, db?(db->block+db->size):0, 
             db?db->x86_addr:0, db?(db->x86_addr+db->x86_size):0, 
-            getAddrFunctionName((uintptr_t)(db?db->x86_addr:0)), (db?db->need_test:0)?"need_stest":"clean", db?db->hash:0, hash);
+            getAddrFunctionName((uintptr_t)(db?db->x86_addr:0)), (db?getNeedTest((uintptr_t)db->x86_addr):0)?"need_stest":"clean", db?db->hash:0, hash);
 #if defined(ARM)
         static const char* reg_name[] = {"EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"};
         if(db)
@@ -985,20 +1113,33 @@ void my_sigactionhandler(int32_t sig, siginfo_t* info, void * ucntx)
 void emit_signal(x86emu_t* emu, int sig, void* addr, int code)
 {
     int Locks = unlockMutex();
-    ucontext_t ctx = {0};
     void* db = NULL;
     siginfo_t info = {0};
     info.si_signo = sig;
-    info.si_errno = 0;
+    info.si_errno = (sig==SIGSEGV)?0x1234:0;    // Mark as a sign this is a #GP(0) (like privileged instruction)
     info.si_code = code;
     info.si_addr = addr;
     printf_log(LOG_INFO, "Emit Signal %d at IP=%p / addr=%p, code=%d\n", sig, (void*)R_EIP, addr, code);
-    my_sigactionhandler_oldcode(sig, 0, Locks, &info, &ctx, NULL, db);
+    my_sigactionhandler_oldcode(sig, 0, Locks, &info, NULL, NULL, db);
+}
+
+void emit_div0(x86emu_t* emu, void* addr, int code)
+{
+    int Locks = unlockMutex();
+    siginfo_t info = {0};
+    info.si_signo = SIGSEGV;
+    info.si_errno = 0xcafe;
+    info.si_code = code;
+    info.si_addr = addr;
+    const char* x86name = NULL;
+    const char* elfname = NULL;
+    printf_log(LOG_INFO, "Emit Divide by 0 at IP=%p, addr=%p\n", (void*)R_EIP, addr);
+    my_sigactionhandler_oldcode(SIGSEGV, 0, Locks, &info, NULL, NULL, NULL);
 }
 
 EXPORT sighandler_t my_signal(x86emu_t* emu, int signum, sighandler_t handler)
 {
-    if(signum<0 || signum>=MAX_SIGNAL) {
+    if(signum<0 || signum>MAX_SIGNAL) {
         errno = EINVAL;
         return SIG_ERR;
     }
@@ -1028,7 +1169,7 @@ EXPORT sighandler_t my_sysv_signal(x86emu_t* emu, int signum, sighandler_t handl
 
 int EXPORT my_sigaction(x86emu_t* emu, int signum, const x86_sigaction_t *act, x86_sigaction_t *oldact)
 {
-    if(signum<0 || signum>=MAX_SIGNAL) {
+    if(signum<0 || signum>MAX_SIGNAL) {
         errno = EINVAL;
         return -1;
     }
@@ -1082,7 +1223,7 @@ __attribute__((alias("my_sigaction")));
 int EXPORT my_syscall_sigaction(x86emu_t* emu, int signum, const x86_sigaction_restorer_t *act, x86_sigaction_restorer_t *oldact, int sigsetsize)
 {
     printf_log(LOG_DEBUG, "Syscall/Sigaction(signum=%d, act=%p, old=%p, size=%d)\n", signum, act, oldact, sigsetsize);
-    if(signum<0 || signum>=MAX_SIGNAL) {
+    if(signum<0 || signum>MAX_SIGNAL) {
         errno = EINVAL;
         return -1;
     }
@@ -1229,8 +1370,12 @@ EXPORT int my_getcontext(x86emu_t* emu, void* ucp)
     u->uc_mcontext.gregs[REG_CS] = R_CS;
     u->uc_mcontext.gregs[REG_SS] = R_SS;
     // get FloatPoint status
+    if(u->uc_mcontext.fpregs)
+        save_fpreg(emu, u->uc_mcontext.fpregs);
     // get signal mask
     sigprocmask(SIG_SETMASK, NULL, (sigset_t*)&u->uc_sigmask);
+    // ensure uc_link is properly initialized
+    u->uc_link = emu->uc_link;
 
     return 0;
 }
@@ -1260,24 +1405,27 @@ EXPORT int my_setcontext(x86emu_t* emu, void* ucp)
     R_CS = u->uc_mcontext.gregs[REG_CS];
     R_SS = u->uc_mcontext.gregs[REG_SS];
     // set FloatPoint status
+    if(u->uc_mcontext.fpregs)
+        load_fpreg(emu, u->uc_mcontext.fpregs);
     // set signal mask
-    //sigprocmask(SIG_SETMASK, NULL, (sigset_t*)&u->uc_sigmask);
+    sigprocmask(SIG_SETMASK, (sigset_t*)&u->uc_sigmask, NULL);
     // set uc_link
     emu->uc_link = u->uc_link;
+    errno = 0;
 
     return R_EAX;
 }
 
 EXPORT int my_makecontext(x86emu_t* emu, void* ucp, void* fnc, int32_t argc, int32_t* argv)
 {
+    (void)emu;
 //    printf_log(LOG_NONE, "Warning: call to unimplemented makecontext\n");
     i386_ucontext_t *u = (i386_ucontext_t*)ucp;
     // setup stack
-    u->uc_mcontext.gregs[REG_ESP] = (uintptr_t)u->uc_stack.ss_sp + u->uc_stack.ss_size - 4;
+    uint32_t* esp = (uint32_t*)((uintptr_t)u->uc_stack.ss_sp + u->uc_stack.ss_size - 4);
     // setup the function
     u->uc_mcontext.gregs[REG_EIP] = (intptr_t)fnc;
     // setup args
-    uint32_t* esp = (uint32_t*)u->uc_mcontext.gregs[REG_ESP];
     for (int i=0; i<argc; ++i) {
         // push value
         --esp;
@@ -1285,7 +1433,7 @@ EXPORT int my_makecontext(x86emu_t* emu, void* ucp, void* fnc, int32_t argc, int
     }
     // push the return value
     --esp;
-    *esp = (uintptr_t)GetExit();
+    *esp = my_context->exit_bridge;
     u->uc_mcontext.gregs[REG_ESP] = (uintptr_t)esp;
     
     return 0;
@@ -1300,11 +1448,21 @@ EXPORT int my_swapcontext(x86emu_t* emu, void* ucp1, void* ucp2)
     my_setcontext(emu, ucp2);
     return 0;
 }
-
+#ifdef USE_SIGNAL_MUTEX
+static void atfork_child_dynarec_prot(void)
+{
+    #ifdef USE_CUSTOM_MUTEX
+    native_lock_store(&mutex_dynarec_prot, 0);
+    #else
+    pthread_mutex_t tmp = PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP; 
+    memcpy(&mutex_dynarec_prot, &tmp, sizeof(mutex_dynarec_prot));
+    #endif
+}
+#endif
 void init_signal_helper(box86context_t* context)
 {
     // setup signal handling
-    for(int i=0; i<MAX_SIGNAL; ++i) {
+    for(int i=0; i<=MAX_SIGNAL; ++i) {
         context->signals[i] = 1;    // SIG_DFL
     }
 	struct sigaction action = {0};
@@ -1319,6 +1477,10 @@ void init_signal_helper(box86context_t* context)
     sigaction(SIGILL, &action, NULL);
 
 	pthread_once(&sigstack_key_once, sigstack_key_alloc);
+#ifdef USE_SIGNAL_MUTEX
+    atfork_child_dynarec_prot();
+    pthread_atfork(NULL, NULL, atfork_child_dynarec_prot);
+#endif
 }
 
 void fini_signal_helper()

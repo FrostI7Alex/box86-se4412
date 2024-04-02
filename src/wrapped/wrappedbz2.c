@@ -18,7 +18,12 @@
 #include "emu/x86emu_private.h"
 #include "myalign.h"
 
-const char* bz2Name = "libbz2.so.1";
+#ifdef ANDROID
+    const char* bz2Name = "libbz2.so";
+#else
+    const char* bz2Name = "libbz2.so.1";
+#endif
+
 #define LIBNAME bz2
 
 #include "generated/wrappedbz2types.h"
@@ -34,10 +39,10 @@ GO(4)
 
 // alloc ...
 #define GO(A)   \
-static uintptr_t my_alloc_fct_##A = 0;                                          \
-static void* my_alloc_##A(void* opaque, int m, int n)                           \
-{                                                                               \
-    return (void*)RunFunction(my_context, my_alloc_fct_##A, 3, opaque, m, n);   \
+static uintptr_t my_alloc_fct_##A = 0;                                                  \
+static void* my_alloc_##A(void* opaque, int m, int n)                                   \
+{                                                                                       \
+    return (void*)RunFunctionFmt(my_alloc_fct_##A, "pii", opaque, m, n);    \
 }
 SUPER()
 #undef GO
@@ -66,10 +71,10 @@ static void* reverse_alloc_Fct(void* fct)
 }
 // free ...
 #define GO(A)   \
-static uintptr_t my_free_fct_##A = 0;                       \
-static void my_free_##A(void* opaque, void* p)              \
-{                                                           \
-    RunFunction(my_context, my_free_fct_##A, 2, opaque, p); \
+static uintptr_t my_free_fct_##A = 0;                               \
+static void my_free_##A(void* opaque, void* p)                      \
+{                                                                   \
+    RunFunctionFmt(my_free_fct_##A, "pp", opaque, p);   \
 }
 SUPER()
 #undef GO
@@ -127,6 +132,7 @@ typedef struct {
 
 EXPORT int my_BZ2_bzCompressInit(x86emu_t* emu, my_bz_stream_t* strm, int blocksize, int verbosity, int work)
 {
+    (void)emu;
     WRAP_BZ(strm);
     int ret = my->BZ2_bzCompressInit(strm, blocksize, verbosity, work);
     UNWRAP_BZ(strm);
@@ -135,6 +141,7 @@ EXPORT int my_BZ2_bzCompressInit(x86emu_t* emu, my_bz_stream_t* strm, int blocks
 
 EXPORT int my_BZ2_bzCompress(x86emu_t* emu, my_bz_stream_t* strm, int action)
 {
+    (void)emu;
     WRAP_BZ(strm);
     int ret = my->BZ2_bzCompress(strm, action);
     UNWRAP_BZ(strm);
@@ -143,6 +150,7 @@ EXPORT int my_BZ2_bzCompress(x86emu_t* emu, my_bz_stream_t* strm, int action)
 
 EXPORT int my_BZ2_bzCompressEnd(x86emu_t* emu, my_bz_stream_t* strm)
 {
+    (void)emu;
     WRAP_BZ(strm);
     int ret = my->BZ2_bzCompressEnd(strm);
     UNWRAP_BZ(strm);
@@ -151,6 +159,7 @@ EXPORT int my_BZ2_bzCompressEnd(x86emu_t* emu, my_bz_stream_t* strm)
 
 EXPORT int my_BZ2_bzDecompressInit(x86emu_t* emu, my_bz_stream_t* strm, int verbosity, int small)
 {
+    (void)emu;
     WRAP_BZ(strm);
     int ret = my->BZ2_bzDecompressInit(strm, verbosity, small);
     UNWRAP_BZ(strm);
@@ -159,6 +168,7 @@ EXPORT int my_BZ2_bzDecompressInit(x86emu_t* emu, my_bz_stream_t* strm, int verb
 
 EXPORT int my_BZ2_bzDecompress(x86emu_t* emu, my_bz_stream_t* strm)
 {
+    (void)emu;
     WRAP_BZ(strm);
     int ret = my->BZ2_bzDecompress(strm);
     UNWRAP_BZ(strm);
@@ -167,6 +177,7 @@ EXPORT int my_BZ2_bzDecompress(x86emu_t* emu, my_bz_stream_t* strm)
 
 EXPORT int my_BZ2_bzDecompressEnd(x86emu_t* emu, my_bz_stream_t* strm)
 {
+    (void)emu;
     WRAP_BZ(strm);
     int ret = my->BZ2_bzDecompressEnd(strm);
     UNWRAP_BZ(strm);
